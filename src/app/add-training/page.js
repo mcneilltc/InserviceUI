@@ -99,7 +99,7 @@ const AddTraining = () => {
   const [locationFilter, setLocationFilter] = useState('all');
   const [topicFilter, setTopicFilter] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
-  
+
 // Generate time options (every 30 minutes from 8 AM to 6 PM)
 const timeOptions = Array.from({ length: 21 }, (_, i) => {
   const hour = Math.floor(i / 2) + 8;
@@ -203,7 +203,7 @@ const timeOptions = Array.from({ length: 21 }, (_, i) => {
     //   // In production, uncomment this API call:
     //   // const response = await axios.post('/api/training-sessions', formData);
     //   // setCreatedTrainingId(response.data.id);
-      
+
     //   // Mock response for development
     //   const mockResponse = { id: '123', ...formData };
     //   setCreatedTrainingId(mockResponse.id);
@@ -903,4 +903,4 @@ const timeOptions = Array.from({ length: 21 }, (_, i) => {
   );
 };
 
-export default AddTraining; 
+export default AddTraining;
