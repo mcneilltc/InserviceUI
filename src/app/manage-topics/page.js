@@ -21,6 +21,7 @@ import {
   Alert,
 } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import axios from 'axios';
 
 const ManageTopics = () => {
   const [topics, setTopics] = useState([]);
@@ -29,37 +30,74 @@ const ManageTopics = () => {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   useEffect(() => {
-    // Mock API call to fetch topics
+    // // Mock API call to fetch topics
+    // const fetchTopics = async () => {
+    //   const mockTopics = ['Safety Procedures', 'Equipment Maintenance', 'Emergency Response'];
+    //   setTopics(mockTopics);
+    // };
+    // fetchTopics();
+
+    // Fetch topics from the backend
     const fetchTopics = async () => {
-      const mockTopics = ['Safety Procedures', 'Equipment Maintenance', 'Emergency Response'];
-      setTopics(mockTopics);
+      try {
+        const response = await axios.get('/api/training-topics'); // Replace with your backend endpoint
+        setTopics(response.data);
+      } catch (error) {
+        console.error('Error fetching topics:', error);
+        setSnackbar({ open: true, message: 'Failed to fetch topics', severity: 'error' });
+      }
     };
     fetchTopics();
+
   }, []);
 
-  const handleAddTopic = () => {
+   // Add a new topic
+   const handleAddTopic = async () => {
     if (!newTopic.trim()) {
       setSnackbar({ open: true, message: 'Topic name cannot be empty', severity: 'error' });
       return;
     }
-    setTopics((prev) => [...prev, newTopic]);
-    setNewTopic('');
-    setSnackbar({ open: true, message: 'Topic added successfully', severity: 'success' });
+    try {
+      const response = await axios.post('/api/training-topics', { topicName: newTopic });
+      setTopics((prev) => [...prev, response.data.topic]);
+      setNewTopic('');
+      setSnackbar({ open: true, message: 'Topic added successfully', severity: 'success' });
+    } catch (error) {
+      console.error('Error adding topic:', error);
+      setSnackbar({ open: true, message: 'Failed to add topic', severity: 'error' });
+    }
   };
-
-  const handleEditTopic = (index, updatedName) => {
-    const updatedTopics = [...topics];
-    updatedTopics[index] = updatedName;
-    setTopics(updatedTopics);
+ // Edit an existing topic
+ const handleEditTopic = async (id, updatedName) => {
+  if (!updatedName.trim()) {
+    setSnackbar({ open: true, message: 'Topic name cannot be empty', severity: 'error' });
+    return;
+  }
+  try {
+    const response = await axios.put(`/api/training-topics/${id}`, { topicName: updatedName });
+    setTopics((prev) =>
+      prev.map((topic) => (topic.id === id ? { ...topic, name: response.data.topic.name } : topic))
+    );
     setEditTopic(null);
     setSnackbar({ open: true, message: 'Topic updated successfully', severity: 'success' });
-  };
-
-  const handleDeleteTopic = (index) => {
-    const updatedTopics = topics.filter((_, i) => i !== index);
-    setTopics(updatedTopics);
+  } catch (error) {
+    console.error('Error updating topic:', error);
+    setSnackbar({ open: true, message: 'Failed to update topic', severity: 'error' });
+  }
+};
+ // Delete a topic
+ const handleDeleteTopic = async (id) => {
+  try {
+    await axios.delete(`/api/training-topics/${id}`);
+    setTopics((prev) => prev.filter((topic) => topic.id !== id));
     setSnackbar({ open: true, message: 'Topic deleted successfully', severity: 'success' });
-  };
+  } catch (error) {
+    console.error('Error deleting topic:', error);
+    const errorMessage =
+      error.response?.data?.message || 'Failed to delete topic';
+    setSnackbar({ open: true, message: errorMessage, severity: 'error' });
+  }
+};
 
   return (
     <Container maxWidth="md">
@@ -83,30 +121,30 @@ const ManageTopics = () => {
           </Grid>
         </Grid>
         <List>
-          {topics.map((topic, index) => (
-            <ListItem key={index}>
+        {topics.map((topic) => (
+            <ListItem key={topic.id}>
               <ListItemText
                 primary={
-                  editTopic === index ? (
+                  editTopic === topic.id ? (
                     <TextField
                       fullWidth
-                      defaultValue={topic}
-                      onBlur={(e) => handleEditTopic(index, e.target.value)}
+                      defaultValue={topic.name}
+                      onBlur={(e) => handleEditTopic(topic.id, e.target.value)}
                       autoFocus
                     />
                   ) : (
-                    topic
+                    topic.name
                   )
                 }
               />
               <ListItemSecondaryAction>
-                <IconButton
+              <IconButton
                   edge="end"
-                  onClick={() => (editTopic === index ? setEditTopic(null) : setEditTopic(index))}
+                  onClick={() => (editTopic === topic.id ? setEditTopic(null) : setEditTopic(topic.id))}
                 >
                   <EditIcon />
                 </IconButton>
-                <IconButton edge="end" color="error" onClick={() => handleDeleteTopic(index)}>
+                <IconButton edge="end" color="error" onClick={() => handleDeleteTopic(topic.id)}>
                   <DeleteIcon />
                 </IconButton>
               </ListItemSecondaryAction>

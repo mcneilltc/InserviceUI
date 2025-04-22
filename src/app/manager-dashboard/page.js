@@ -73,13 +73,15 @@ const ManagerDashboard = () => {
   const fetchStats = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/api/stats', {
-        params: {
-          startDate: startDate.format('DD-MM-YYYY'),
-          endDate: endDate.format('DD-MM-YYYY'),
-        },
-      });
-      setStats(response.data);
+      const response = await axios.get('/api/training-sessions'); // Replace with your backend endpoint
+      const sessions = response.data;
+  
+      // Calculate stats
+      const totalHours = sessions.reduce((sum, session) => sum + parseFloat(session.length || 0), 0);
+      const activeEmployees = new Set(sessions.map((session) => session.trainer)).size;
+      const trainingSessions = sessions.length;
+  
+      setStats({ totalHours, activeEmployees, trainingSessions });
     } catch (error) {
       console.error('Error fetching stats:', error);
       setError('Failed to fetch statistics');

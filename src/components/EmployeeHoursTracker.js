@@ -55,6 +55,16 @@ const EmployeeHoursTracker = () => {
     setTraineesByHours({ completed, atRisk });
   };
 
+  const fetchEmployeeSessions = async (employeeId) => {
+    try {
+      const response = await axios.get(`/api/training-sessions/employee/${employeeId}`); // Replace with your backend endpoint
+      setSessions(response.data);
+    } catch (error) {
+      console.error('Error fetching employee sessions:', error);
+      setError('Failed to fetch employee sessions');
+    }
+  };
+
   return (
     <Container maxWidth="md">
       <Paper sx={{ p: 4, mt: 4 }}>

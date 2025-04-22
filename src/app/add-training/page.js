@@ -196,39 +196,55 @@ const timeOptions = Array.from({ length: 21 }, (_, i) => {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    try {
-      // In development, log the form data
-      console.log('Form submitted:', formData);
+    // try {
+    //   // In development, log the form data
+    //   console.log('Form submitted:', formData);
 
-      // In production, uncomment this API call:
-      // const response = await axios.post('/api/training-sessions', formData);
-      // setCreatedTrainingId(response.data.id);
+    //   // In production, uncomment this API call:
+    //   // const response = await axios.post('/api/training-sessions', formData);
+    //   // setCreatedTrainingId(response.data.id);
       
-      // Mock response for development
-      const mockResponse = { id: '123', ...formData };
-      setCreatedTrainingId(mockResponse.id);
+    //   // Mock response for development
+    //   const mockResponse = { id: '123', ...formData };
+    //   setCreatedTrainingId(mockResponse.id);
 
+    //   setSnackbar({
+    //     open: true,
+    //     message: 'Training session created successfully! You can now add trainees.',
+    //     severity: 'success',
+    //   });
+
+    //   // Reset form
+    //   setFormData({
+    //     date: null,
+    //     location: '',
+    //     startTime: '',
+    //     length: '',
+    //     topic: '',
+    //     trainer: '',
+    //     status: 'scheduled',
+    //   });
+
+    //   // Open trainee dialog
+    //   setOpenTraineeDialog(true);
+    // } catch (error) {
+    //   console.error('Error submitting form:', error);
+    //   setSnackbar({
+    //     open: true,
+    //     message: 'Failed to create training session',
+    //     severity: 'error',
+    //   });
+    // }
+    try {
+      const response = await axios.post(`/api/training-sessions/${selectedEmployeeId}`, formData); // Replace with your backend endpoint
       setSnackbar({
         open: true,
-        message: 'Training session created successfully! You can now add trainees.',
+        message: 'Training session created successfully!',
         severity: 'success',
       });
-
-      // Reset form
-      setFormData({
-        date: null,
-        location: '',
-        startTime: '',
-        length: '',
-        topic: '',
-        trainer: '',
-        status: 'scheduled',
-      });
-
-      // Open trainee dialog
-      setOpenTraineeDialog(true);
+      setCreatedTrainingId(response.data.sessionId);
     } catch (error) {
-      console.error('Error submitting form:', error);
+      console.error('Error creating training session:', error);
       setSnackbar({
         open: true,
         message: 'Failed to create training session',
