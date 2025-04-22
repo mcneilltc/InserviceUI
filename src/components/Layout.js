@@ -10,6 +10,7 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
+  ListItemButton,
   Toolbar,
   Typography,
   useTheme,
@@ -27,6 +28,7 @@ import {
 } from '@mui/icons-material';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
+import GoogleAuth from '@/components/GoogleAuth';
 
 const drawerWidth = 240;
 
@@ -57,25 +59,25 @@ const Layout = ({ children }) => {
     <div>
       <Toolbar>
         <Typography variant="h6" noWrap component="div">
-          Training App
+          iTrain
         </Typography>
       </Toolbar>
       <Divider />
       <List>
-        {menuItems.map((item) => (
-          <ListItem
-            button
-            key={item.text}
-            component={Link}
-            href={item.path}
-            selected={pathname === item.path}
-            onClick={() => isMobile && setMobileOpen(false)}
-          >
-            <ListItemIcon>{item.icon}</ListItemIcon>
-            <ListItemText primary={item.text} />
-          </ListItem>
-        ))}
-      </List>
+  {menuItems.map((item) => (
+    <ListItem key={item.text} disablePadding>
+      <ListItemButton
+        component={Link}
+        href={item.path}
+        selected={pathname === item.path}
+        onClick={() => isMobile && setMobileOpen(false)}
+      >
+        <ListItemIcon>{item.icon}</ListItemIcon>
+        <ListItemText primary={item.text} />
+      </ListItemButton>
+    </ListItem>
+  ))}
+</List>
     </div>
   );
 
@@ -105,6 +107,9 @@ const Layout = ({ children }) => {
           <Typography variant="h6" noWrap component="div">
             {menuItems.find(item => item.path === pathname)?.text || 'Training App'}
           </Typography>
+          <Box sx={{ ml: 'auto' }}>
+            <GoogleAuth /> {/* Add GoogleAuth component here */}
+          </Box>
         </Toolbar>
       </AppBar>
       <Box

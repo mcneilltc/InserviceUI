@@ -44,7 +44,7 @@ export default async function handler(req, res) {
         // return res.status(200).json(mockTrainers);
 
       case 'POST':
-        const { name, email, phone, expertise } = body;
+        const { name, email, phone } = body;
 
         if (!name || !email) {
           return res.status(400).json({ message: 'Name and email are required' });
@@ -60,7 +60,7 @@ export default async function handler(req, res) {
         mockTrainers.push(newTrainer);
 
         // In production, you would make an actual API call:
-        // const response = await axios.post(`${BACKEND_API_URL}/api/trainers`, { name, email, phone, expertise });
+        // const response = await axios.post(`${BACKEND_API_URL}/api/trainers`, { name, email, phone });
         // return res.status(201).json(response.data);
 
         return res.status(201).json(newTrainer);
