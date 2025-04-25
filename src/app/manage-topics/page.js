@@ -13,10 +13,10 @@ import {
   ListItemText,
   ListItemSecondaryAction,
   IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
+//   Dialog,
+//   DialogTitle,
+//   DialogContent,
+//   DialogActions,
   Snackbar,
   Alert,
 } from '@mui/material';
@@ -53,20 +53,35 @@ const ManageTopics = () => {
 
    // Add a new topic
    const handleAddTopic = async () => {
+    // If the new topic is empty, show an error message
     if (!newTopic.trim()) {
       setSnackbar({ open: true, message: 'Topic name cannot be empty', severity: 'error' });
       return;
     }
+
+
     try {
+      // Make a POST request to the backend to add the new topic
+      // If I remember correctly, axios setup
       const response = await axios.post('/api/training-topics', { topicName: newTopic });
+      // At the top of this component, we have a state variable called topics that holds the list of topics
+      // We use the setTopics function to update this state variable
+        // We use the spread operator (...) to create a new array that includes all the previous topics
+      // If the topic is successfully added, it is included in the response from the server after
+      // calling /api/training-topics. We then add this new topic to the list of topics and update
+      // the state variable.
       setTopics((prev) => [...prev, response.data.topic]);
+      console.log('Topic added:', response.data);
       setNewTopic('');
+      // The snackbar is a component that shows a message at the bottom of the screen
+      // It is used to provide feedback to the user about the success or failure of an action
       setSnackbar({ open: true, message: 'Topic added successfully', severity: 'success' });
     } catch (error) {
       console.error('Error adding topic:', error);
       setSnackbar({ open: true, message: 'Failed to add topic', severity: 'error' });
     }
   };
+
  // Edit an existing topic
  const handleEditTopic = async (id, updatedName) => {
   if (!updatedName.trim()) {
@@ -106,7 +121,7 @@ const ManageTopics = () => {
           Manage Topics
         </Typography>
         <Grid container spacing={2} sx={{ mb: 4 }}>
-          <Grid item xs={9}>
+          <Grid>
             <TextField
               fullWidth
               label="New Topic"
@@ -114,7 +129,7 @@ const ManageTopics = () => {
               onChange={(e) => setNewTopic(e.target.value)}
             />
           </Grid>
-          <Grid item xs={3}>
+          <Grid>
             <Button variant="contained" color="primary" fullWidth onClick={handleAddTopic}>
               Add Topic
             </Button>

@@ -23,7 +23,7 @@ import { Edit as EditIcon, Delete as DeleteIcon, Archive as ArchiveIcon, Unarchi
 import axios from 'axios';
 
 const ManageTrainers = () => {
-  const router = useRouter();
+//   const router = useRouter();
   const [trainers, setTrainers] = useState([]);
   const [newTrainer, setNewTrainer] = useState({ name: '', email: '', phone: '' });
   const [editTrainer, setEditTrainer] = useState(null);
@@ -46,7 +46,7 @@ const ManageTrainers = () => {
     useEffect(() => {
       const fetchTrainers = async () => {
         try {
-          const response = await axios.get('/api/trainers'); 
+          const response = await axios.get('/api/trainers');
           setTrainers(response.data);
         } catch (error) {
           console.error('Error fetching trainers:', error);
@@ -54,7 +54,7 @@ const ManageTrainers = () => {
         }
       };
       fetchTrainers();
-    }, []); 
+    }, []);
 
   // Add a new trainer
   const handleAddTrainer = async () => {
@@ -64,11 +64,15 @@ const ManageTrainers = () => {
       setSnackbar({ open: true, message: 'Name and email are required', severity: 'error' });
       return;
     }
+
+    console.log('Adding trainer:', { name, email, phone });
+
     try {
-      const response = await axios.post('/api/trainers', { name, email, phone });
+      const response = await axios.post('/api/trainers', { 'name': name, 'email': email, 'phone': phone });
       setTrainers((prev) => [...prev, response.data.trainer]); // Access trainer from response.data
+      console.log('Trainer added:', response.data);
       setNewTrainer({ name: '', email: '', phone: '' });
-      setSnackbar({ open: true, message: 'Trainer added successfully', severity: 'success' });
+      setSnackbar({ open: true, message: response.message || response.data.message, severity: 'success' });
     } catch (error) {
       console.error('Error adding trainer:', error);
       setSnackbar({ open: true, message: 'Failed to add trainer', severity: 'error' });

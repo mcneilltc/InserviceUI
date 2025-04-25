@@ -64,7 +64,7 @@ const Layout = ({ children }) => {
       <List>
         {menuItems.map((item) => (
           <ListItem
-            button
+            // button
             key={item.text}
             component={Link}
             href={item.path}
@@ -154,4 +154,4 @@ const Layout = ({ children }) => {
   );
 };
 
-export default Layout; 
+export default Layout;
