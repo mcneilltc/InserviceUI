@@ -34,7 +34,7 @@ const GoogleAuth = () => {
         console.log('auth2 module loaded.');
         try {
           const auth2 = window.gapi.auth2.init({
-            client_id: process.env.GOOGLE_CLIENT_ID,
+            client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
           });
 
           auth2.isSignedIn.listen(setIsSignedIn);
@@ -104,8 +104,9 @@ const GoogleAuth = () => {
     const auth2 = window.gapi.auth2.getAuthInstance();
     try {
       await auth2.signOut();
+      await auth2.disconnect();
       setUser(null);
-      setIsSignedIn(false);
+      setIsSignedIn(false);  
     } catch (error) {
       console.error('Google Sign-Out failed:', error);
     }

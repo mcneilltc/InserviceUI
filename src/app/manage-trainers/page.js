@@ -58,21 +58,21 @@ const ManageTrainers = () => {
 
   // Add a new trainer
   const handleAddTrainer = async () => {
-    console.log('📤 Sending POST to /api/trainers:', { name, email, phone });
-    console.log('handleAddTrainer function called');
+    // console.log('📤 Sending POST to /api/trainers:', { name, email, phone });
+    // console.log('handleAddTrainer function called');
     const { name, email, phone } = newTrainer;
     if (!name.trim() || !email.trim()) {
       setSnackbar({ open: true, message: 'Name and email are required', severity: 'error' });
       return;
     }
     try {
-      const response = await axios.post('/api/trainers', { name, email, phone });
+      const response = await axios.post('/api/trainers', { name: name.trim(), email: email.trim(), phone: phone });
       setTrainers((prev) => [...prev, response.data.trainer]); // Access trainer from response.data
       setNewTrainer({ name: '', email: '', phone: '' });
       setSnackbar({ open: true, message: 'Trainer added successfully', severity: 'success' });
     } catch (error) {
       console.error('Error adding trainer:', error);
-      console.error('❌ Request failed:', error.response?.data || error.message);
+      // console.error('❌ Request failed:', error.response?.data || error.message);
       setSnackbar({ open: true, message: 'Failed to add trainer', severity: 'error' });
     }
   };
