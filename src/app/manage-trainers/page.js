@@ -58,6 +58,7 @@ const ManageTrainers = () => {
 
   // Add a new trainer
   const handleAddTrainer = async () => {
+    console.log('📤 Sending POST to /api/trainers:', { name, email, phone });
     console.log('handleAddTrainer function called');
     const { name, email, phone } = newTrainer;
     if (!name.trim() || !email.trim()) {
@@ -75,6 +76,7 @@ const ManageTrainers = () => {
       setSnackbar({ open: true, message: response.message || response.data.message, severity: 'success' });
     } catch (error) {
       console.error('Error adding trainer:', error);
+      console.error('❌ Request failed:', error.response?.data || error.message);
       setSnackbar({ open: true, message: 'Failed to add trainer', severity: 'error' });
     }
   };

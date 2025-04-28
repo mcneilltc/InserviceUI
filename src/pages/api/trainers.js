@@ -44,7 +44,7 @@ export default async function handler(req, res) {
         // return res.status(200).json(mockTrainers);
 
       case 'POST':
-        const { name, email, phone, expertise } = body;
+        const { name, email, phone } = body;
 
         if (!name || !email) {
           return res.status(400).json({ message: 'Name and email are required' });
