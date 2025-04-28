@@ -4,32 +4,32 @@ import axios from 'axios';
 const BACKEND_API_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
 
 // In-memory storage for development
-let mockTrainers = [
-  {
-    id: 1,
-    name: 'John Smith',
-    email: 'john.smith@example.com',
-    phone: '(555) 123-4567',
-  },
-  {
-    id: 2,
-    name: 'Sarah Johnson',
-    email: 'sarah.j@example.com',
-    phone: '(555) 234-5678',
-  },
-  {
-    id: 3,
-    name: 'Michael Brown',
-    email: 'michael.b@example.com',
-    phone: '(555) 345-6789',
-  },
-  {
-    id: 4,
-    name: 'Emily Davis',
-    email: 'emily.d@example.com',
-    phone: '(555) 456-7890',
-  },
-];
+// let mockTrainers = [
+//   {
+//     id: 1,
+//     name: 'John Smith',
+//     email: 'john.smith@example.com',
+//     phone: '(555) 123-4567',
+//   },
+//   {
+//     id: 2,
+//     name: 'Sarah Johnson',
+//     email: 'sarah.j@example.com',
+//     phone: '(555) 234-5678',
+//   },
+//   {
+//     id: 3,
+//     name: 'Michael Brown',
+//     email: 'michael.b@example.com',
+//     phone: '(555) 345-6789',
+//   },
+//   {
+//     id: 4,
+//     name: 'Emily Davis',
+//     email: 'emily.d@example.com',
+//     phone: '(555) 456-7890',
+//   },
+// ];
 
 export default async function handler(req, res) {
   const { method, query, body } = req;
@@ -51,19 +51,18 @@ export default async function handler(req, res) {
         }
 
         // In development, add to in-memory array
-        const newTrainer = {
-          id: mockTrainers.length + 1,
-          name: name.trim(),
-          email: email.trim(),
-          phone: phone?.trim() || '',
-        };
-        mockTrainers.push(newTrainer);
+        // const newTrainer = {
+        //   id: mockTrainers.length + 1,
+        //   name: name.trim(),
+        //   email: email.trim(),
+        //   phone: phone?.trim() || '',
+        // };
+        // mockTrainers.push(newTrainer);
 
         // In production, you would make an actual API call:
-        // const response = await axios.post(`${BACKEND_API_URL}/api/trainers`, { name, email, phone });
-        // return res.status(201).json(response.data);
+        const newTrainer = await axios.post(`${BACKEND_API_URL}/api/trainers`, { name, email, phone });
+        return res.status(201).json(newTrainer.data);
 
-        return res.status(201).json(newTrainer);
 
       case 'PUT':
         const { id } = query;
@@ -89,7 +88,7 @@ export default async function handler(req, res) {
 
         // In production, you would make an actual API call:
         const updateTrainer = await axios.put(`${BACKEND_API_URL}/api/trainers/${id}`, { name: updatedName, email: updatedEmail, phone: updatedPhone, expertise: updatedExpertise });
-        return res.status(200).json(response.data);
+        return res.status(200).json(updateTrainer.data);
 
         // return res.status(200).json(mockTrainers[trainerIndex]);
 
@@ -119,9 +118,9 @@ export default async function handler(req, res) {
     }
   } catch (error) {
     console.error('Error handling trainer request:', error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       message: 'Internal server error',
-      error: error.message 
+      error: error.message
     });
   }
-} 
+}

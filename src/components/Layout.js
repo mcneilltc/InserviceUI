@@ -64,20 +64,20 @@ const Layout = ({ children }) => {
       </Toolbar>
       <Divider />
       <List>
-  {menuItems.map((item) => (
-    <ListItem key={item.text} disablePadding>
-      <ListItemButton
-        component={Link}
-        href={item.path}
-        selected={pathname === item.path}
-        onClick={() => isMobile && setMobileOpen(false)}
-      >
-        <ListItemIcon>{item.icon}</ListItemIcon>
-        <ListItemText primary={item.text} />
-      </ListItemButton>
-    </ListItem>
-  ))}
-</List>
+        {menuItems.map((item) => (
+          <ListItem
+            // button
+            key={item.text}
+            component={Link}
+            href={item.path}
+            selected={pathname === item.path}
+            onClick={() => isMobile && setMobileOpen(false)}
+          >
+            <ListItemIcon>{item.icon}</ListItemIcon>
+            <ListItemText primary={item.text} />
+          </ListItem>
+        ))}
+      </List>
     </div>
   );
 
@@ -159,4 +159,4 @@ const Layout = ({ children }) => {
   );
 };
 
-export default Layout; 
+export default Layout;
