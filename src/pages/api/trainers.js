@@ -100,12 +100,12 @@ export default async function handler(req, res) {
         }
 
         // In development, delete from in-memory array
-        const deleteIndex = mockTrainers.findIndex((trainer) => trainer.id === parseInt(deleteId));
-        if (deleteIndex === -1) {
-          return res.status(404).json({ message: 'Trainer not found' });
-        }
+        // const deleteIndex = mockTrainers.findIndex((trainer) => trainer.id === parseInt(deleteId));
+        // if (deleteIndex === -1) {
+        //   return res.status(404).json({ message: 'Trainer not found' });
+        // }
 
-        mockTrainers = mockTrainers.filter((trainer) => trainer.id !== parseInt(deleteId));
+        // mockTrainers = mockTrainers.filter((trainer) => trainer.id !== parseInt(deleteId));
 
         // In production, you would make an actual API call:
         await axios.delete(`${BACKEND_API_URL}/api/trainers/${deleteId}`);

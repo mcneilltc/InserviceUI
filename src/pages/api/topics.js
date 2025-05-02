@@ -17,10 +17,10 @@ export default async function handler(req, res) {
     switch (method) {
       case 'GET':
         // In production, you would make an actual API call:
-        // const response = await axios.get(`${BACKEND_API_URL}/api/topics`);
-        // return res.status(200).json(response.data);
+        const response = await axios.get(`${BACKEND_API_URL}/api/topics`);
+        return res.status(200).json(response.data);
 
-        return res.status(200).json(mockTopics);
+        // return res.status(200).json(mockTopics);
 
       case 'POST':
         const { name } = body;
@@ -30,17 +30,17 @@ export default async function handler(req, res) {
         }
 
         // In development, add to in-memory array
-        const newTopic = {
-          id: mockTopics.length + 1,
-          name: name.trim(),
-        };
-        mockTopics.push(newTopic);
+        // const newTopic = {
+        //   id: mockTopics.length + 1,
+        //   name: name.trim(),
+        // };
+        // mockTopics.push(newTopic);
 
         // In production, you would make an actual API call:
-        // const response = await axios.post(`${BACKEND_API_URL}/api/topics`, { name });
-        // return res.status(201).json(response.data);
+        const newTopic = await axios.post(`${BACKEND_API_URL}/api/topics`, { name });
+        return res.status(201).json(newTopic.data);
 
-        return res.status(201).json(newTopic);
+        // return res.status(201).json(newTopic);
 
       case 'PUT':
         const { id } = query;
@@ -51,21 +51,21 @@ export default async function handler(req, res) {
         }
 
         // In development, update in-memory array
-        const topicIndex = mockTopics.findIndex((topic) => topic.id === parseInt(id));
-        if (topicIndex === -1) {
-          return res.status(404).json({ message: 'Topic not found' });
-        }
+        // const topicIndex = mockTopics.findIndex((topic) => topic.id === parseInt(id));
+        // if (topicIndex === -1) {
+        //   return res.status(404).json({ message: 'Topic not found' });
+        // }
 
-        mockTopics[topicIndex] = {
-          ...mockTopics[topicIndex],
-          name: updatedName.trim(),
-        };
+        // mockTopics[topicIndex] = {
+        //   ...mockTopics[topicIndex],
+        //   name: updatedName.trim(),
+        // };
 
         // In production, you would make an actual API call:
-        // const response = await axios.put(`${BACKEND_API_URL}/api/topics/${id}`, { name: updatedName });
-        // return res.status(200).json(response.data);
+        const updateTopic = await axios.put(`${BACKEND_API_URL}/api/topics/${id}`, { name: updatedName });
+        return res.status(200).json(updateTopic.data);
 
-        return res.status(200).json(mockTopics[topicIndex]);
+        // return res.status(200).json(mockTopics[topicIndex]);
 
       case 'DELETE':
         const { id: deleteId } = query;
@@ -75,15 +75,15 @@ export default async function handler(req, res) {
         }
 
         // In development, delete from in-memory array
-        const deleteIndex = mockTopics.findIndex((topic) => topic.id === parseInt(deleteId));
-        if (deleteIndex === -1) {
-          return res.status(404).json({ message: 'Topic not found' });
-        }
+        // const deleteIndex = mockTopics.findIndex((topic) => topic.id === parseInt(deleteId));
+        // if (deleteIndex === -1) {
+        //   return res.status(404).json({ message: 'Topic not found' });
+        // }
 
-        mockTopics = mockTopics.filter((topic) => topic.id !== parseInt(deleteId));
+        // mockTopics = mockTopics.filter((topic) => topic.id !== parseInt(deleteId));
 
         // In production, you would make an actual API call:
-        // await axios.delete(`${BACKEND_API_URL}/api/topics/${deleteId}`);
+        await axios.delete(`${BACKEND_API_URL}/api/topics/${deleteId}`);
         // return res.status(204).end();
 
         return res.status(204).end();

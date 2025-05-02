@@ -4,28 +4,28 @@ import { NextApiRequest, NextApiResponse } from 'next';
 const LOCATIONS = ['MCAC', 'Ramsey Creek Beach', 'Double Oaks', 'Cordelia'];
 
 // Mock data for development
-let employees = [
-  {
-    id: '1',
-    name: 'John Doe',
-    email: 'john.doe@example.com',
-    position: 'Software Engineer',
-    hireDate: '2023-01-15',
-    isActive: true,
-    archivedAt: null,
-    locations: ['MCAC', 'Ramsey Creek Beach'],
-  },
-  {
-    id: '2',
-    name: 'Jane Smith',
-    email: 'jane.smith@example.com',
-    position: 'HR Manager',
-    hireDate: '2022-06-01',
-    isActive: true,
-    archivedAt: null,
-    locations: ['Double Oaks'],
-  },
-];
+// let employees = [
+//   {
+//     id: '1',
+//     name: 'John Doe',
+//     email: 'john.doe@example.com',
+//     position: 'Software Engineer',
+//     hireDate: '2023-01-15',
+//     isActive: true,
+//     archivedAt: null,
+//     locations: ['MCAC', 'Ramsey Creek Beach'],
+//   },
+//   {
+//     id: '2',
+//     name: 'Jane Smith',
+//     email: 'jane.smith@example.com',
+//     position: 'HR Manager',
+//     hireDate: '2022-06-01',
+//     isActive: true,
+//     archivedAt: null,
+//     locations: ['Double Oaks'],
+//   },
+// ];
 
 export default async function handler(req, res) {
   const { method } = req;
@@ -34,14 +34,14 @@ export default async function handler(req, res) {
     case 'GET':
       try {
         // In production, this would be a database query
-        // const employees = await prisma.employee.findMany({
-        //   where: {
-        //     isActive: true,
-        //   },
-        //   orderBy: {
-        //     name: 'asc',
-        //   },
-        // });
+        const employees = await prisma.employee.findMany({
+          where: {
+            isActive: true,
+          },
+          orderBy: {
+            name: 'asc',
+          },
+        });
         res.status(200).json(employees);
       } catch (error) {
         res.status(500).json({ error: 'Failed to fetch employees' });
@@ -94,10 +94,10 @@ export default async function handler(req, res) {
         };
 
         // In production, this would be a database insert
-        // const employee = await prisma.employee.create({
-        //   data: newEmployee,
-        // });
-        employees.push(newEmployee);
+        const employee = await prisma.employee.create({
+          data: newEmployee,
+        });
+        // employees.push(newEmployee);
 
         res.status(201).json(newEmployee);
       } catch (error) {
@@ -147,11 +147,11 @@ export default async function handler(req, res) {
         };
 
         // In production, this would be a database update
-        // const employee = await prisma.employee.update({
-        //   where: { id },
-        //   data: updatedEmployee,
-        // });
-        employees[employeeIndex] = updatedEmployee;
+        const employee = await prisma.employee.update({
+          where: { id },
+          data: updatedEmployee,
+        });
+        // employees[employeeIndex] = updatedEmployee;
 
         res.status(200).json(updatedEmployee);
       } catch (error) {
@@ -182,13 +182,13 @@ export default async function handler(req, res) {
         };
 
         // In production, this would be a database update
-        // await prisma.employee.update({
-        //   where: { id },
-        //   data: {
-        //     isActive: false,
-        //     archivedAt: new Date(),
-        //   },
-        // });
+        await prisma.employee.update({
+          where: { id },
+          data: {
+            isActive: false,
+            archivedAt: new Date(),
+          },
+        });
 
         res.status(200).json({ message: 'Employee archived successfully' });
       } catch (error) {
