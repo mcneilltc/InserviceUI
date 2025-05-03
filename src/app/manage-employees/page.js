@@ -36,7 +36,7 @@ import {
   Stack,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { Edit as EditIcon, Archive as ArchiveIcon, Add as AddIcon, LocationOn as LocationIcon } from '@mui/icons-material';
+import { Edit as EditIcon, Archive as ArchiveIcon, Add as AddIcon, LocationOn as LocationIcon, Unarchive } from '@mui/icons-material';
 import axios from 'axios';
 import moment from 'moment';
 
@@ -167,6 +167,29 @@ const ManageEmployees = () => {
     }
   };
 
+    const handleUnarchive = async (employee) => {
+    try {
+      await axios.put(`/api/employees`, {
+        id: employee.id,
+        isActive: true,
+        archivedAt: null,
+      });
+      setSnackbar({
+        open: true,
+        message: 'Employee unarchived successfully',
+        severity: 'success',
+      });
+      fetchEmployees(); // Refresh the employee list
+    } catch (error) {
+      console.error('Error unarchiving employee:', error);
+      setSnackbar({
+        open: true,
+        message: 'Failed to unarchive employee',
+        severity: 'error',
+      });
+    }
+  };
+
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
   };
@@ -284,7 +307,7 @@ const ManageEmployees = () => {
         </Tabs>
 
         {/* Location Summary */}
-        <Card sx={{ mb: 3 }}>
+        {/* <Card sx={{ mb: 3 }}>
           <CardContent>
             <Typography variant="h6" gutterBottom>
               Location Summary
@@ -311,7 +334,7 @@ const ManageEmployees = () => {
               ))}
             </Stack>
           </CardContent>
-        </Card>
+        </Card> */}
 
         {/* Location Filter */}
         <FormControl sx={{ mb: 3, minWidth: 200 }}>
@@ -387,15 +410,21 @@ const ManageEmployees = () => {
                     </Box>
                   </TableCell>
                   <TableCell>{moment(employee.hireDate).format('MMM D, YYYY')}</TableCell>
-                  {activeTab === 0 && (
-                    <TableCell>
-                      <IconButton onClick={() => handleOpenDialog(employee)}>
-                        <EditIcon />
-                      </IconButton>
-                      <IconButton onClick={() => handleArchive(employee)}>
-                        <ArchiveIcon />
-                      </IconButton>
-                    </TableCell>
+                  {activeTab === 0 ? (
+        <TableCell>
+          <IconButton onClick={() => handleOpenDialog(employee)}>
+            <EditIcon color='primary' />
+          </IconButton>
+          <IconButton onClick={() => handleArchive(employee)}>
+            <ArchiveIcon color='error'/>
+          </IconButton>
+        </TableCell>
+      ) : (
+        <TableCell>
+          <IconButton onClick={() => handleUnarchive(employee)}>
+            <Unarchive color="success" />
+          </IconButton>
+        </TableCell>
                   )}
                 </TableRow>
               ))}

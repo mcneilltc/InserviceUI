@@ -37,6 +37,7 @@ const menuItems = [
   { text: 'Add Training', icon: <AddIcon />, path: '/add-training' },
   { text: 'Manage Topics', icon: <TopicIcon />, path: '/manage-topics' },
   { text: 'Manage Trainers', icon: <PersonIcon />, path: '/manage-trainers' },
+  { text: 'Manage Employees', icon: <PeopleIcon />, path: '/manage-employees' },
   { text: 'Reports', icon: <AssessmentIcon />, path: '/reports' },
 ];
 

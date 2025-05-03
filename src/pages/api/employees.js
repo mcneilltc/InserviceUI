@@ -107,7 +107,7 @@ export default async function handler(req, res) {
 
     case 'PUT':
       try {
-        const { id, name, email, position, hireDate, isActive, locations } = req.body;
+        const { id, name, email, position, hireDate, isActive, locations, archivedAt } = req.body;
 
         // Validate required fields
         if (!id) {
