@@ -34,14 +34,14 @@ export default async function handler(req, res) {
     case 'GET':
       try {
         // In production, this would be a database query
-        // const employees = await prisma.employee.findMany({
-        //   where: {
-        //     isActive: true,
-        //   },
-        //   orderBy: {
-        //     name: 'asc',
-        //   },
-        // });
+        const employees = await prisma.employee.findMany({
+          where: {
+            isActive: true,
+          },
+          orderBy: {
+            name: 'asc',
+          },
+        });
         res.status(200).json(employees);
       } catch (error) {
         res.status(500).json({ error: 'Failed to fetch employees' });
@@ -94,9 +94,9 @@ export default async function handler(req, res) {
         };
 
         // In production, this would be a database insert
-        // const employee = await prisma.employee.create({
-        //   data: newEmployee,
-        // });
+        const employee = await prisma.employee.create({
+          data: newEmployee,
+        });
         employees.push(newEmployee);
 
         res.status(201).json(newEmployee);
@@ -147,10 +147,10 @@ export default async function handler(req, res) {
         };
 
         // In production, this would be a database update
-        // const employee = await prisma.employee.update({
-        //   where: { id },
-        //   data: updatedEmployee,
-        // });
+        const employee = await prisma.employee.update({
+          where: { id },
+          data: updatedEmployee,
+        });
         employees[employeeIndex] = updatedEmployee;
 
         res.status(200).json(updatedEmployee);
@@ -182,13 +182,13 @@ export default async function handler(req, res) {
         };
 
         // In production, this would be a database update
-        // await prisma.employee.update({
-        //   where: { id },
-        //   data: {
-        //     isActive: false,
-        //     archivedAt: new Date(),
-        //   },
-        // });
+        await prisma.employee.update({
+          where: { id },
+          data: {
+            isActive: false,
+            archivedAt: new Date(),
+          },
+        });
 
         res.status(200).json({ message: 'Employee archived successfully' });
       } catch (error) {
