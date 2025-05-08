@@ -18,6 +18,9 @@ import {
   MenuItem,
   Button,
   TextField,
+  List,
+  ListItem,
+  ListItemText,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -54,6 +57,7 @@ const ManagerDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [stats, setStats] = useState(null);
+  const [checkIns, setCheckIns] = useState([]);
 
   useEffect(() => {
     fetchEmployees();
@@ -87,6 +91,32 @@ const ManagerDashboard = () => {
       setError('Failed to fetch statistics');
     } finally {
       setLoading(false);
+    }
+  };
+
+    // Fetch check-ins
+    useEffect(() => {
+      const fetchCheckIns = async () => {
+        try {
+          const response = await axios.get('/api/checkins'); // Replace with your backend endpoint
+          setCheckIns(response.data);
+        } catch (error) {
+          console.error('Error fetching check-ins:', error);
+        }
+      };
+  
+      fetchCheckIns();
+    }, []);
+
+    // Mark check-in as completed
+  const markAsCompleted = async (checkInId) => {
+    try {
+      await axios.put(`/api/checkins/${checkInId}`, { status: 'completed' });
+      setCheckIns((prev) =>
+        prev.filter((checkIn) => checkIn.id !== checkInId)
+      );
+    } catch (error) {
+      console.error('Error marking check-in as completed:', error);
     }
   };
 
@@ -189,6 +219,28 @@ const ManagerDashboard = () => {
         {/* Employee Hours Tracker */}
         <EmployeeHoursTracker />
       </Box>
+      <Paper sx={{ p: 4, mt: 4 }}>
+        <Typography variant="h4" gutterBottom>
+          Check-Ins
+        </Typography>
+        <List>
+          {checkIns.map((checkIn) => (
+            <ListItem key={checkIn.id}>
+              <ListItemText
+                primary={`${checkIn.name} (${checkIn.email})`}
+                secondary={`Phone: ${checkIn.phone}, Location: ${checkIn.location}`}
+              />
+              <Button
+                variant="contained"
+                color="success"
+                onClick={() => markAsCompleted(checkIn.id)}
+              >
+                Mark as Completed
+              </Button>
+            </ListItem>
+          ))}
+        </List>
+      </Paper>
     </Container>
   );
 };
