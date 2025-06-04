@@ -38,6 +38,7 @@ import {
 } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
 import EmployeeHoursTracker from '../../components/EmployeeHoursTracker';
+// import ProtectedRoute from '../components/ProtectedRoute';
 
 // Register ChartJS components
 ChartJS.register(
@@ -246,3 +247,11 @@ const ManagerDashboard = () => {
 };
 
 export default ManagerDashboard; 
+
+// export default function Page() {
+//   return (
+//     <ProtectedRoute>
+//       <ManagerDashboard />
+//     </ProtectedRoute>
+//   );
+// }

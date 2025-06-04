@@ -10,6 +10,7 @@ import { CacheProvider } from "@emotion/react";
 import createCache from "@emotion/cache";
 import theme from "../styles/theme";
 import Layout from "../components/Layout";
+import { AuthProvider } from "@/components/AuthContext";
 // import AuthGuard from "../components/AuthGuard";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -21,6 +22,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body className={inter.className}>
+        <AuthProvider>
         <CacheProvider value={clientSideEmotionCache}>
           <ThemeProvider theme={theme}>
             <LocalizationProvider dateAdapter={AdapterDateFns}>
@@ -31,6 +33,7 @@ export default function RootLayout({ children }) {
             </LocalizationProvider>
           </ThemeProvider>
         </CacheProvider>
+        </AuthProvider>
       </body>
     </html>
   );

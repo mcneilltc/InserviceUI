@@ -3,11 +3,13 @@
 import React, { useEffect, useState } from 'react';
 import { Button } from '@mui/material';
 import axios from 'axios';
+import { useAuth } from '../context/AuthContext';
 
 const GoogleAuth = () => {
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { login } = useAuth();
 
   useEffect(() => {
     const loadGoogleScript = () => {
@@ -90,6 +92,7 @@ const GoogleAuth = () => {
         email: profile.getEmail(),
       });
       setIsSignedIn(true);
+      login({ name: profile.getName(), email: profile.getEmail() });
     } catch (error) {
       console.error('Google Sign-In failed:', error);
     }
