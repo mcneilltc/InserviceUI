@@ -3,9 +3,9 @@
 import React, { useEffect, useState } from 'react';
 import { Button } from '@mui/material';
 import axios from 'axios';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../components/AuthContext';
 
-const GoogleAuth = () => {
+const GoogleAuth = ({ onLogin }) => {
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -87,12 +87,18 @@ const GoogleAuth = () => {
       const response = await axios.post('/api/google-signin', { idToken });
       console.log('Backend response:', response.data);
 
-      setUser({
+      const userData = {
         name: profile.getName(),
         email: profile.getEmail(),
-      });
+      };
+      setUser(userData);
       setIsSignedIn(true);
-      login({ name: profile.getName(), email: profile.getEmail() });
+      
+      if (onLogin) {
+        onLogin(userData);
+      } else {
+        login(userData);
+      }
     } catch (error) {
       console.error('Google Sign-In failed:', error);
     }

@@ -103,6 +103,14 @@ const AddTraining = () => {
   const [locationFilter, setLocationFilter] = useState("all");
   const [topicFilter, setTopicFilter] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
+  const [openManualAddDialog, setOpenManualAddDialog] = useState(false);
+  const [manualEmployeeData, setManualEmployeeData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    location: '',
+  });
+  const [selectedSessionForManualAdd, setSelectedSessionForManualAdd] = useState(null);
 
   // Generate time options (every 30 minutes from 8 AM to 6 PM)
   const timeOptions = Array.from({ length: 21 }, (_, i) => {
@@ -117,51 +125,19 @@ const AddTraining = () => {
     // Fetch data from API
     const fetchData = async () => {
       try {
-        // In development, use mock data
-        const mockEmployees = [
-          { id: 1, name: "John Doe" },
-          { id: 2, name: "Jane Smith" },
-          { id: 3, name: "Mike Johnson" },
-        ];
+        const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
+        
+        const [employeesResponse, topicsResponse, trainersResponse, sessionsResponse] = await Promise.all([
+          axios.get(`${BACKEND_URL}/api/employees`).catch(() => ({ data: [] })),
+          axios.get(`${BACKEND_URL}/api/training-topics`).catch(() => ({ data: [] })),
+          axios.get(`${BACKEND_URL}/api/trainers`).catch(() => ({ data: [] })),
+          axios.get(`${BACKEND_URL}/api/sessions`).catch(() => ({ data: [] })),
+        ]);
 
-        const mockTopics = [
-          "Safety Procedures",
-          "Equipment Maintenance",
-          "Emergency Response",
-          "First Aid",
-        ];
-
-        const mockTrainers = [
-          { id: 1, name: "Sarah Wilson" },
-          { id: 2, name: "Tom Brown" },
-          { id: 3, name: "Lisa Davis" },
-        ];
-
-        const mockTrainingSessions = [
-          {
-            id: "123",
-            date: "2024-03-20",
-            topic: "Safety Procedures",
-            trainer: "Sarah Wilson",
-            status: "in-progress",
-            trainees: [1, 2],
-          },
-        ];
-
-        setEmployees(mockEmployees);
-        setTopics(mockTopics);
-        setTrainers(mockTrainers);
-        setTrainingSessions(mockTrainingSessions);
-
-        // In production, uncomment these API calls:
-        // const employeesResponse = await axios.get('/api/employees');
-        // const topicsResponse = await axios.get('/api/topics');
-        // const trainersResponse = await axios.get('/api/trainers');
-        // const sessionsResponse = await axios.get('/api/training-sessions');
-        // setEmployees(employeesResponse.data);
-        // setTopics(topicsResponse.data);
-        // setTrainers(trainersResponse.data);
-        // setTrainingSessions(sessionsResponse.data);
+        setEmployees(employeesResponse.data);
+        setTopics(topicsResponse.data.map(t => t.name || t));
+        setTrainers(trainersResponse.data);
+        setTrainingSessions(sessionsResponse.data);
       } catch (error) {
         console.error("Error fetching data:", error);
         setSnackbar({
@@ -200,56 +176,40 @@ const AddTraining = () => {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    // try {
-    //   // In development, log the form data
-    //   console.log('Form submitted:', formData);
-
-    //   // In production, uncomment this API call:
-    //   // const response = await axios.post('/api/training-sessions', formData);
-    //   // setCreatedTrainingId(response.data.id);
-
-    //   // Mock response for development
-    //   const mockResponse = { id: '123', ...formData };
-    //   setCreatedTrainingId(mockResponse.id);
-
-    //   setSnackbar({
-    //     open: true,
-    //     message: 'Training session created successfully! You can now add trainees.',
-    //     severity: 'success',
-    //   });
-
-    //   // Reset form
-    //   setFormData({
-    //     date: null,
-    //     location: '',
-    //     startTime: '',
-    //     length: '',
-    //     topic: '',
-    //     trainer: '',
-    //     status: 'scheduled',
-    //   });
-
-    //   // Open trainee dialog
-    //   setOpenTraineeDialog(true);
-    // } catch (error) {
-    //   console.error('Error submitting form:', error);
-    //   setSnackbar({
-    //     open: true,
-    //     message: 'Failed to create training session',
-    //     severity: 'error',
-    //   });
-    // }
     try {
+      const sessionData = {
+        ...formData,
+        date: formData.date ? moment(formData.date).format('YYYY-MM-DD') : null,
+        name: formData.topic || 'Training Session',
+      };
+
+      const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
       const response = await axios.post(
-        `/api/training-sessions/${selectedEmployeeId}`,
-        formData
-      ); // Replace with your backend endpoint
+        `${BACKEND_URL}/api/sessions`,
+        sessionData
+      );
+      
       setSnackbar({
         open: true,
         message: "Training session created successfully!",
         severity: "success",
       });
       setCreatedTrainingId(response.data.sessionId);
+      
+      // Refresh training sessions list
+      const sessionsResponse = await axios.get(`${BACKEND_URL}/api/sessions`);
+      setTrainingSessions(sessionsResponse.data);
+      
+      // Reset form
+      setFormData({
+        date: null,
+        location: "",
+        startTime: "",
+        length: "",
+        topic: "",
+        trainer: [],
+        status: "scheduled",
+      });
     } catch (error) {
       console.error("Error creating training session:", error);
       setSnackbar({
@@ -260,36 +220,50 @@ const AddTraining = () => {
     }
   };
 
-    const handleAddTrainees = async (qrCodeValue) => {
+  const handleAddTrainees = async () => {
     try {
-      // Extract the session ID from the QR code value
-      const sessionId = qrCodeValue.split("/checkin/")[1];
-  
-      // Find the corresponding training session
-      const session = trainingSessions.find((s) => s.id === sessionId);
-      if (!session) {
+      const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
+      const sessionId = createdTrainingId;
+      
+      if (!sessionId) {
         setSnackbar({
           open: true,
-          message: "Training session not found!",
+          message: "No training session selected!",
           severity: "error",
         });
         return;
       }
-  
+
+      // Get current session
+      const sessionResponse = await axios.get(`${BACKEND_URL}/api/sessions/${sessionId}`);
+      const session = sessionResponse.data;
+      
+      // Calculate trainer count and validate 1:12 ratio
+      const trainerCount = Array.isArray(session.trainer) ? session.trainer.length : (session.trainer ? 1 : 0);
+      const maxTrainees = trainerCount * 12;
+      const currentTrainees = session.trainees?.length || 0;
+      const newTrainees = selectedTrainees.filter(id => !(session.trainees || []).includes(id));
+      const totalTrainees = currentTrainees + newTrainees.length;
+      
+      if (totalTrainees > maxTrainees) {
+        setSnackbar({
+          open: true,
+          message: `Training ratio exceeded! Maximum ${maxTrainees} trainees allowed for ${trainerCount} trainer(s) (1:12 ratio). Current: ${currentTrainees}, Adding: ${newTrainees.length}`,
+          severity: "error",
+        });
+        return;
+      }
+      
       // Update the session with the new trainees
-      const updatedTrainees = [...new Set([...session.trainees, ...selectedTrainees])];
-  
-      // In production, uncomment this API call:
-      await axios.put(`/api/training-sessions/${sessionId}`, {
+      const updatedTrainees = [...new Set([...(session.trainees || []), ...selectedTrainees])];
+      
+      await axios.put(`${BACKEND_URL}/api/sessions/${sessionId}`, {
         trainees: updatedTrainees,
       });
   
-      // Update the local state
-      setTrainingSessions((prev) =>
-        prev.map((s) =>
-          s.id === sessionId ? { ...s, trainees: updatedTrainees } : s
-        )
-      );
+      // Refresh training sessions list
+      const sessionsResponse = await axios.get(`${BACKEND_URL}/api/sessions`);
+      setTrainingSessions(sessionsResponse.data);
   
       setSnackbar({
         open: true,
@@ -308,19 +282,104 @@ const AddTraining = () => {
     }
   };
 
+  const handleManualAddEmployee = (sessionId) => {
+    setSelectedSessionForManualAdd(sessionId);
+    setOpenManualAddDialog(true);
+  };
+
+  const handleSubmitManualEmployee = async () => {
+    try {
+      if (!selectedSessionForManualAdd) return;
+
+      const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
+      
+      // Submit check-in for the manually added employee
+      await axios.post(`${BACKEND_URL}/api/checkin`, {
+        sessionId: selectedSessionForManualAdd,
+        ...manualEmployeeData,
+      });
+
+      // Also add to session trainees if needed
+      const sessionResponse = await axios.get(`${BACKEND_URL}/api/sessions/${selectedSessionForManualAdd}`);
+      const session = sessionResponse.data;
+      
+      // Create or find employee and add to session
+      const employeesResponse = await axios.get(`${BACKEND_URL}/api/employees`);
+      let employee = employeesResponse.data.find(emp => emp.email === manualEmployeeData.email);
+      
+      if (!employee) {
+        // Create new employee
+        const newEmployeeResponse = await axios.post(`${BACKEND_URL}/api/employees`, {
+          name: manualEmployeeData.name,
+          email: manualEmployeeData.email,
+          location: manualEmployeeData.location,
+        });
+        employee = { id: newEmployeeResponse.data.id };
+      }
+
+      // Add employee to session trainees
+      const updatedTrainees = [...new Set([...(session.trainees || []), employee.id])];
+      await axios.put(`${BACKEND_URL}/api/sessions/${selectedSessionForManualAdd}`, {
+        trainees: updatedTrainees,
+      });
+
+      setSnackbar({
+        open: true,
+        message: "Employee added manually to training session!",
+        severity: "success",
+      });
+      
+      setOpenManualAddDialog(false);
+      setManualEmployeeData({
+        name: '',
+        email: '',
+        phone: '',
+        location: '',
+      });
+      setSelectedSessionForManualAdd(null);
+      
+      // Refresh training sessions
+      const sessionsResponse = await axios.get(`${BACKEND_URL}/api/sessions`);
+      setTrainingSessions(sessionsResponse.data);
+    } catch (error) {
+      console.error("Error manually adding employee:", error);
+      setSnackbar({
+        open: true,
+        message: "Failed to add employee manually",
+        severity: "error",
+      });
+    }
+  };
+
   const handleUpdateTrainees = async (sessionId) => {
     setCreatedTrainingId(sessionId);
-    const session = trainingSessions.find((s) => s.id === sessionId);
-    setSelectedTrainees(session.trainees || []);
-    setOpenTraineeDialog(true);
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
+    try {
+      // Fetch the latest session data
+      const sessionResponse = await axios.get(`${BACKEND_URL}/api/sessions/${sessionId}`);
+      const session = sessionResponse.data;
+      setSelectedTrainees(session.trainees || []);
+      setOpenTraineeDialog(true);
+    } catch (error) {
+      console.error("Error fetching session:", error);
+      setSnackbar({
+        open: true,
+        message: "Failed to load session data",
+        severity: "error",
+      });
+    }
   };
 
   const handleCompleteTraining = async (sessionId) => {
     try {
-      // In production, uncomment this API call:
-      // await axios.put(`/api/training-sessions/${sessionId}`, {
-      //   status: 'completed',
-      // });
+      const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
+      await axios.put(`${BACKEND_URL}/api/sessions/${sessionId}`, {
+        status: 'completed',
+      });
+
+      // Refresh training sessions list
+      const sessionsResponse = await axios.get(`${BACKEND_URL}/api/sessions`);
+      setTrainingSessions(sessionsResponse.data);
 
       setSnackbar({
         open: true,
@@ -520,9 +579,9 @@ const AddTraining = () => {
         </Typography>
 
         <form onSubmit={handleSubmit}>
-          <Grid container spacing={3}>
+          <Grid container spacing={2}>
             {/* Date Picker */}
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={6} sx={{ minWidth: '250px' }}>
               <LocalizationProvider dateAdapter={AdapterDateFns}>
                 <DatePicker
                   label="Training Date"
@@ -536,7 +595,7 @@ const AddTraining = () => {
             </Grid>
 
             {/* Location */}
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={6} sx={{ minWidth: '250px' }}>
               <FormControl fullWidth required>
                 <InputLabel>Training Location</InputLabel>
                 <Select
@@ -554,7 +613,7 @@ const AddTraining = () => {
             </Grid>
 
             {/* Start Time */}
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={6} sx={{ minWidth: '250px' }}>
               <FormControl fullWidth required>
                 <InputLabel>Start Time</InputLabel>
                 <Select
@@ -572,7 +631,7 @@ const AddTraining = () => {
             </Grid>
 
             {/* Training Length */}
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={6} sx={{ minWidth: '250px' }}>
               <TextField
                 fullWidth
                 required
@@ -584,7 +643,7 @@ const AddTraining = () => {
             </Grid>
 
             {/* Topic */}
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={6} sx={{ minWidth: '250px' }}>
               <FormControl fullWidth required>
                 <InputLabel>Training Topic</InputLabel>
                 <Select
@@ -592,8 +651,8 @@ const AddTraining = () => {
                   label="Training Topic"
                   onChange={handleChange("topic")}
                 >
-                  {topics.map((topic) => (
-                    <MenuItem key={topic} value={topic}>
+                  {topics.map((topic, index) => (
+                    <MenuItem key={`topic-${index}-${topic}`} value={topic}>
                       {topic}
                     </MenuItem>
                   ))}
@@ -603,7 +662,7 @@ const AddTraining = () => {
             </Grid>
 
             {/* Trainer */}
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={6} sx={{ minWidth: '250px' }}>
               <FormControl fullWidth required>
                 <InputLabel>Trainers</InputLabel>
                 <Select
@@ -758,8 +817,8 @@ const AddTraining = () => {
                       onChange={(e) => setTopicFilter(e.target.value)}
                     >
                       <MenuItem value="all">All Topics</MenuItem>
-                      {topics.map((topic) => (
-                        <MenuItem key={topic} value={topic}>
+                      {topics.map((topic, index) => (
+                        <MenuItem key={`topic-filter-${index}-${topic}`} value={topic}>
                           {topic}
                         </MenuItem>
                       ))}
@@ -803,8 +862,8 @@ const AddTraining = () => {
               if (activeTab === 2) return session.archived;
               return true;
             })
-            .map((session) => (
-              <React.Fragment key={session.id}>
+            .map((session, index) => (
+              <React.Fragment key={`session-${session.id || index}-${session.topic || 'unknown'}-${session.date || 'nodate'}-${index}`}>
                 <ListItem>
                   <ListItemText
                     primary={
@@ -822,20 +881,19 @@ const AddTraining = () => {
                       </Box>
                     }
                     secondary={
-                      <Box
-                        sx={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 1,
-                          mt: 0.5,
-                        }}
-                      >
+                      <>
                         <Typography
                           variant="body2"
                           color="text.secondary"
                           component="span"
+                          sx={{ display: 'inline-block', mr: 1 }}
                         >
-                          {session.date} - {session.trainer}
+                          {session.date} - {Array.isArray(session.trainer) 
+                            ? session.trainer.map(trainerId => {
+                                const trainer = trainers.find(t => t.id === trainerId);
+                                return trainer ? trainer.name : trainerId;
+                              }).join(', ')
+                            : session.trainer}
                         </Typography>
                         <Typography
                           variant="body2"
@@ -844,7 +902,7 @@ const AddTraining = () => {
                         >
                           • {session.trainees?.length || 0} trainees
                         </Typography>
-                      </Box>
+                      </>
                     }
                   />
 
@@ -863,6 +921,15 @@ const AddTraining = () => {
                                 onClick={() => handleUpdateTrainees(session.id)}
                               >
                                 <GroupIcon />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Manually Add Employee">
+                              <IconButton
+                                edge="end"
+                                onClick={() => handleManualAddEmployee(session.id)}
+                                color="primary"
+                              >
+                                <AddIcon />
                               </IconButton>
                             </Tooltip>
                             <Tooltip title="Mark as Completed">
@@ -944,13 +1011,31 @@ const AddTraining = () => {
         <DialogContent>
           <Typography variant="body1" gutterBottom>
             {createdTrainingId
-              ? "Update the list of trainees for this training session."
+              ? "Update the list of trainees for this training session. Current trainees are pre-selected."
               : "Select the trainees who have arrived for the training session."}
           </Typography>
+          {createdTrainingId && (() => {
+            const session = trainingSessions.find(s => s.id === createdTrainingId);
+            const trainerCount = Array.isArray(session?.trainer) ? session.trainer.length : (session?.trainer ? 1 : 0);
+            const maxTrainees = trainerCount * 12;
+            const currentCount = selectedTrainees.length;
+            return (
+              <Box sx={{ mt: 2, mb: 2, p: 2, bgcolor: currentCount >= maxTrainees ? 'error.light' : 'info.light', borderRadius: 1 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Current Trainees: {currentCount} | Max Allowed: {maxTrainees} ({trainerCount} trainer(s) × 12)
+                  {currentCount >= maxTrainees && (
+                    <Typography variant="body2" color="error" sx={{ mt: 1 }}>
+                      Maximum capacity reached!
+                    </Typography>
+                  )}
+                </Typography>
+              </Box>
+            );
+          })()}
           <Box sx={{ mt: 2 }}>
             <Grid container spacing={2}>
-              {employees.map((employee) => (
-                <Grid item xs={12} key={employee.id}>
+              {employees.map((employee, index) => (
+                <Grid item xs={12} key={employee.id || `employee-${index}-${employee.name}`}>
                   <Paper
                     sx={{
                       p: 1,
@@ -989,6 +1074,66 @@ const AddTraining = () => {
           <Button onClick={() => setOpenTraineeDialog(false)}>Cancel</Button>
           <Button onClick={handleAddTrainees} variant="contained">
             {createdTrainingId ? "Update Trainees" : "Add Selected Trainees"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Manual Add Employee Dialog */}
+      <Dialog
+        open={openManualAddDialog}
+        onClose={() => setOpenManualAddDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Manually Add Employee to Training</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" gutterBottom sx={{ mb: 2 }}>
+            Use this form to manually add an employee when the QR code fails to scan.
+          </Typography>
+          <TextField
+            fullWidth
+            label="Name"
+            value={manualEmployeeData.name}
+            onChange={(e) => setManualEmployeeData({ ...manualEmployeeData, name: e.target.value })}
+            required
+            sx={{ mb: 2 }}
+          />
+          {/* <TextField
+            fullWidth
+            label="Email"
+            type="email"
+            value={manualEmployeeData.email}
+            onChange={(e) => setManualEmployeeData({ ...manualEmployeeData, email: e.target.value })}
+            required
+            sx={{ mb: 2 }}
+          /> */}
+          {/* <TextField
+            fullWidth
+            label="Phone"
+            value={manualEmployeeData.phone}
+            onChange={(e) => setManualEmployeeData({ ...manualEmployeeData, phone: e.target.value })}
+            required
+            sx={{ mb: 2 }}
+          /> */}
+          <FormControl fullWidth required sx={{ mb: 2 }}>
+            <InputLabel>Location</InputLabel>
+            <Select
+              value={manualEmployeeData.location}
+              onChange={(e) => setManualEmployeeData({ ...manualEmployeeData, location: e.target.value })}
+            >
+              <MenuItem value="">Select Location</MenuItem>
+              {locations.map((location) => (
+                <MenuItem key={location} value={location}>
+                  {location}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenManualAddDialog(false)}>Cancel</Button>
+          <Button onClick={handleSubmitManualEmployee} variant="contained" disabled={!manualEmployeeData.name || !manualEmployeeData.email || !manualEmployeeData.phone || !manualEmployeeData.location}>
+            Add Employee
           </Button>
         </DialogActions>
       </Dialog>

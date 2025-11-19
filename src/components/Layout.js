@@ -29,6 +29,7 @@ import {
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import GoogleAuth from '@/components/GoogleAuth';
+// import MicrosoftAuth from './MicrosoftAuth';
 
 const drawerWidth = 240;
 
@@ -108,7 +109,8 @@ const Layout = ({ children }) => {
             {menuItems.find(item => item.path === pathname)?.text || 'Training App'}
           </Typography>
           <Box sx={{ ml: 'auto' }}>
-            <GoogleAuth /> {/* Add GoogleAuth component here */}
+            <GoogleAuth /> {/*Add GoogleAuth component here*/}
+            {/* <MicrosoftAuth /> */}
           </Box>
         </Toolbar>
       </AppBar>

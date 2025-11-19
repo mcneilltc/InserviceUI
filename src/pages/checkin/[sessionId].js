@@ -32,14 +32,15 @@ const CheckIn = () => {
   useEffect(() => {
     if (sessionId) {
       console.log("Fetching session details for sessionId:", sessionId);
+      const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
       axios
-        .get(`/api/training-sessions/${sessionId}`)
+        .get(`${BACKEND_URL}/api/sessions/${sessionId}`)
         .then((response) => {
-          setSessionName(response.data.name);
+          setSessionName(response.data.name || response.data.topic || 'Training Session');
         })
         .catch((error) => {
           console.error("Error fetching session details:", error);
-          setSessionName("");
+          setSessionName("Training Session");
         });
     }
   }, [sessionId]);
@@ -54,8 +55,19 @@ const CheckIn = () => {
   const handleSubmit = async (event) => {
     event.preventDefault();
     try {
-      await axios.post(`/api/checkin`, { sessionId, ...formData });
+      const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
+      await axios.post(`${BACKEND_URL}/api/checkin`, { sessionId, ...formData });
       setSnackbar({ open: true, message: 'Check-in successful!', severity: 'success' });
+      
+      // Clear form after successful submission
+      setTimeout(() => {
+        setFormData({
+          name: '',
+          email: '',
+          phone: '',
+          location: '',
+        });
+      }, 2000);
     } catch (error) {
       console.error('Error during check-in:', error);
       setSnackbar({ open: true, message: 'Failed to check in.', severity: 'error' });

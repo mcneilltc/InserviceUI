@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import GoogleAuth from './GoogleAuth';
+// import MicrosoftAuth from './MicrosoftAuth';
 import { CircularProgress, Box, Typography } from '@mui/material';
 
 const AuthGuard = ({ children }) => {
@@ -54,6 +55,7 @@ const AuthGuard = ({ children }) => {
           Please sign in to access the application.
         </Typography>
         <GoogleAuth />
+        {/* <MicrosoftAuth /> */}
       </Box>
     );
   }
