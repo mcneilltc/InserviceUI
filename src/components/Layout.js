@@ -25,6 +25,7 @@ import {
   Topic as TopicIcon,
   Person as PersonIcon,
   Assessment as AssessmentIcon,
+  CloudUpload as CloudUploadIcon,
 } from '@mui/icons-material';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -36,6 +37,7 @@ const drawerWidth = 240;
 const menuItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/manager-dashboard' },
   { text: 'Add Training', icon: <AddIcon />, path: '/add-training' },
+  { text: 'Upload Sheet', icon: <CloudUploadIcon />, path: '/upload-inservice' },
   { text: 'Manage Topics', icon: <TopicIcon />, path: '/manage-topics' },
   { text: 'Manage Trainers', icon: <PersonIcon />, path: '/manage-trainers' },
   { text: 'Reports', icon: <AssessmentIcon />, path: '/reports' },
