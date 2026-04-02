@@ -10,8 +10,10 @@ import { CacheProvider } from "@emotion/react";
 import createCache from "@emotion/cache";
 import theme from "../styles/theme";
 import Layout from "../components/Layout";
-import { AuthProvider } from "@/components/AuthContext";
+import { AuthProvider } from "../components/AuthContext";
 // import AuthGuard from "../components/AuthGuard";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useState } from "react";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -19,9 +21,12 @@ const inter = Inter({ subsets: ["latin"] });
 const clientSideEmotionCache = createCache({ key: "css" });
 
 export default function RootLayout({ children }) {
+  const [queryClient] = useState(() => new QueryClient());
+
   return (
     <html lang="en">
       <body className={inter.className}>
+        <QueryClientProvider client={queryClient}>
         <AuthProvider>
         <CacheProvider value={clientSideEmotionCache}>
           <ThemeProvider theme={theme}>
@@ -34,6 +39,7 @@ export default function RootLayout({ children }) {
           </ThemeProvider>
         </CacheProvider>
         </AuthProvider>
+        </QueryClientProvider>
       </body>
     </html>
   );

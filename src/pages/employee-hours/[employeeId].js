@@ -54,11 +54,13 @@ const EmployeeHours = () => {
     if (employeeId) {
       fetchSessions();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employeeId]);
 
   // Apply filters when sessions or filters change
   useEffect(() => {
     applyFilters();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessions, filters]);
 
   const fetchSessions = async () => {

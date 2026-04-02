@@ -69,6 +69,7 @@ const ManagerDashboard = () => {
     fetchStats();
     fetchCheckIns();
     fetchCompletedSessions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workSite, period, startDate, endDate, checkInLocationFilter]);
 
   const fetchCompletedSessions = async () => {

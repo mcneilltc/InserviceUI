@@ -39,13 +39,12 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { Edit as EditIcon, Archive as ArchiveIcon, Add as AddIcon, LocationOn as LocationIcon } from '@mui/icons-material';
 import axios from 'axios';
 import moment from 'moment';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 const LOCATIONS = ['MCAC', 'Ramsey Creek Beach', 'Double Oaks', 'Cordelia'];
 
 const ManageEmployees = () => {
-  const [employees, setEmployees] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const queryClient = useQueryClient();
   const [openDialog, setOpenDialog] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [formData, setFormData] = useState({
@@ -62,22 +61,65 @@ const ManageEmployees = () => {
   const [openBulkDialog, setOpenBulkDialog] = useState(false);
   const [bulkLocations, setBulkLocations] = useState([]);
 
-  useEffect(() => {
-    fetchEmployees();
-  }, [activeTab]);
-
-  const fetchEmployees = async () => {
-    try {
+  const { data: employees = [], isLoading: loading, error: queryError } = useQuery({
+    queryKey: ['employees'],
+    queryFn: async () => {
       const response = await axios.get('/api/employees');
-      setEmployees(response.data);
-      setError(null);
-    } catch (error) {
-      console.error('Error fetching employees:', error);
-      setError('Failed to fetch employees');
-    } finally {
-      setLoading(false);
+      // For some reason some employees might have been recorded wrong, safeguard UI
+      return response.data.map(emp => ({ ...emp, locations: emp.locations || [] }));
     }
+  });
+  const error = queryError ? 'Failed to fetch employees' : null;
+
+  const handleError = (err, defaultMessage) => {
+    console.error(err);
+    setSnackbar({
+      open: true,
+      message: err.response?.data?.error?.message || defaultMessage,
+      severity: 'error',
+    });
   };
+
+  const createMutation = useMutation({
+    mutationFn: (newEmployee) => axios.post('/api/employees', newEmployee),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      setSnackbar({ open: true, message: 'Employee added successfully', severity: 'success' });
+      handleCloseDialog();
+    },
+    onError: (err) => handleError(err, 'Failed to add employee')
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (data) => axios.put(`/api/employees/${data.id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      setSnackbar({ open: true, message: 'Employee updated successfully', severity: 'success' });
+      handleCloseDialog();
+    },
+    onError: (err) => handleError(err, 'Failed to update employee')
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => axios.delete(`/api/employees/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      setSnackbar({ open: true, message: 'Employee archived successfully', severity: 'success' });
+    },
+    onError: (err) => handleError(err, 'Failed to archive employee')
+  });
+
+  const bulkUpdateMutation = useMutation({
+    mutationFn: (promises) => Promise.all(promises),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      setSnackbar({ open: true, message: 'Locations assigned successfully', severity: 'success' });
+      setOpenBulkDialog(false);
+      setSelectedEmployees([]);
+      setBulkLocations([]);
+    },
+    onError: (err) => handleError(err, 'Failed to assign locations')
+  });
 
   const handleOpenDialog = (employee = null) => {
     if (employee) {
@@ -114,56 +156,20 @@ const ManageEmployees = () => {
     });
   };
 
-  const handleSubmit = async () => {
-    try {
-      if (editingEmployee) {
-        await axios.put('/api/employees', {
-          id: editingEmployee.id,
-          ...formData,
-        });
-        setSnackbar({
-          open: true,
-          message: 'Employee updated successfully',
-          severity: 'success',
-        });
-      } else {
-        await axios.post('/api/employees', formData);
-        setSnackbar({
-          open: true,
-          message: 'Employee added successfully',
-          severity: 'success',
-        });
-      }
-      handleCloseDialog();
-      fetchEmployees();
-    } catch (error) {
-      console.error('Error saving employee:', error);
-      setSnackbar({
-        open: true,
-        message: error.response?.data?.error || 'Failed to save employee',
-        severity: 'error',
+  const handleSubmit = () => {
+    if (editingEmployee) {
+      updateMutation.mutate({
+        id: editingEmployee.id,
+        ...formData,
       });
+    } else {
+      createMutation.mutate(formData);
     }
   };
 
-  const handleArchive = async (employee) => {
+  const handleArchive = (employee) => {
     if (window.confirm('Are you sure you want to archive this employee?')) {
-      try {
-        await axios.delete(`/api/employees?id=${employee.id}`);
-        setSnackbar({
-          open: true,
-          message: 'Employee archived successfully',
-          severity: 'success',
-        });
-        fetchEmployees();
-      } catch (error) {
-        console.error('Error archiving employee:', error);
-        setSnackbar({
-          open: true,
-          message: 'Failed to archive employee',
-          severity: 'error',
-        });
-      }
+      deleteMutation.mutate(employee.id);
     }
   };
 
@@ -199,34 +205,11 @@ const ManageEmployees = () => {
     setBulkLocations(event.target.value);
   };
 
-  const handleBulkAssignLocations = async () => {
-    try {
-      const promises = selectedEmployees.map(employeeId => {
-        const employee = employees.find(emp => emp.id === employeeId);
-        return axios.put('/api/employees', {
-          id: employeeId,
-          locations: bulkLocations,
-        });
-      });
-
-      await Promise.all(promises);
-      setSnackbar({
-        open: true,
-        message: 'Locations assigned successfully',
-        severity: 'success',
-      });
-      setOpenBulkDialog(false);
-      setSelectedEmployees([]);
-      setBulkLocations([]);
-      fetchEmployees();
-    } catch (error) {
-      console.error('Error assigning locations:', error);
-      setSnackbar({
-        open: true,
-        message: 'Failed to assign locations',
-        severity: 'error',
-      });
-    }
+  const handleBulkAssignLocations = () => {
+    const promises = selectedEmployees.map(employeeId => 
+      axios.put(`/api/employees/${employeeId}`, { locations: bulkLocations })
+    );
+    bulkUpdateMutation.mutate(promises);
   };
 
   const getLocationSummary = () => {
