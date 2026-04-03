@@ -38,9 +38,13 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterMoment } from '@mui/x-date-pickers/AdapterMoment';
 import axios from 'axios';
 import moment from 'moment';
-import { Download as DownloadIcon } from '@mui/icons-material';
+import { Download as DownloadIcon, Warning as WarningIcon, Error as ErrorIcon, CheckCircle as CheckCircleIcon } from '@mui/icons-material';
+import { Chart as ChartJS, ArcElement, Tooltip as ChartTooltip, Legend } from 'chart.js';
+import { Doughnut } from 'react-chartjs-2';
 import EmployeeHoursTracker from '../../components/EmployeeHoursTracker';
 import { useAuth } from '../../components/AuthContext';
+
+ChartJS.register(ArcElement, ChartTooltip, Legend);
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
 
@@ -52,6 +56,8 @@ const ManagerDashboard = () => {
   const [stats, setStats] = useState(null);
   const [checkIns, setCheckIns] = useState([]);
   const [completedSessions, setCompletedSessions] = useState([]);
+  const [complianceData, setComplianceData] = useState(null);
+  const [complianceLoading, setComplianceLoading] = useState(false);
   
   // Filter states
   const [workSite, setWorkSite] = useState('all');
@@ -69,6 +75,7 @@ const ManagerDashboard = () => {
     fetchStats();
     fetchCheckIns();
     fetchCompletedSessions();
+    fetchComplianceStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workSite, period, startDate, endDate, checkInLocationFilter]);
 
@@ -119,6 +126,21 @@ const ManagerDashboard = () => {
     }
   };
 
+  const fetchComplianceStatus = async () => {
+    try {
+      setComplianceLoading(true);
+      const params = {
+        month: startDate.format('YYYY-MM'),
+      };
+      const response = await axios.get(`${BACKEND_URL}/api/compliance/status`, { params });
+      setComplianceData(response.data);
+    } catch (error) {
+      console.error('Error fetching compliance status:', error);
+    } finally {
+      setComplianceLoading(false);
+    }
+  };
+
   const fetchCheckIns = async () => {
     try {
       const response = await axios.get(`${BACKEND_URL}/api/checkin`);
@@ -142,6 +164,32 @@ const ManagerDashboard = () => {
     if (newValue && moment.isMoment(newValue)) {
       setter(newValue);
     }
+  };
+
+  const handleDownloadSiteReport = (siteName, employeesList) => {
+    const headers = ['Name', 'Email', 'Location', 'Hours This Month', 'Needed By 15th', 'Needed By End', 'Status'];
+    const csvContent = [
+      headers.join(','),
+      ...employeesList.map(emp => [
+        `"${emp.name || ''}"`,
+        `"${emp.email || ''}"`,
+        `"${emp.location || ''}"`,
+        emp.hoursThisMonth || 0,
+        emp.hoursNeededByMidMonth || 0,
+        emp.hoursNeededByEndOfMonth || 0,
+        emp.status
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `compliance_report_${siteName.replace(/\s+/g, '_')}_${moment().format('YYYY-MM-DD')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleDownloadReport = async () => {
@@ -190,7 +238,7 @@ const ManagerDashboard = () => {
       <Box sx={{ py: 4 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
           <Box>
-            <Typography variant="h4" gutterBottom>
+            <Typography variant="h4" fontWeight="bold" gutterBottom>
               Manager Dashboard
             </Typography>
             {user && (
@@ -199,14 +247,48 @@ const ManagerDashboard = () => {
               </Typography>
             )}
           </Box>
-          <Button
-            variant="contained"
-            startIcon={<DownloadIcon />}
-            onClick={handleDownloadReport}
-          >
-            Download Report
-          </Button>
+          <Stack direction="row" spacing={2}>
+            <Button
+              variant="outlined"
+              startIcon={<DownloadIcon />}
+              onClick={handleDownloadReport}
+            >
+              Full Report
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<CheckCircleIcon />}
+              color="success"
+              onClick={() => setShowEmployeesNeedingTraining(true)}
+            >
+              Compliance Overview
+            </Button>
+          </Stack>
         </Box>
+
+        {/* Compliance Alerts */}
+        {complianceData && (
+          <Box sx={{ mb: 4 }}>
+            {moment().date() >= 15 && complianceData.alerts.midMonth.length > 0 && (
+              <Alert 
+                severity="error" 
+                icon={<ErrorIcon />}
+                sx={{ mb: 2, borderRadius: 2, fontWeight: 'bold' }}
+              >
+                URGENT: {complianceData.alerts.midMonth.length} employees have 0 hours of inservice recorded as of the 15th.
+              </Alert>
+            )}
+            {moment().date() < 15 && complianceData.alerts.needsNotice.length > 0 && (
+              <Alert 
+                severity="warning" 
+                icon={<WarningIcon />}
+                sx={{ mb: 2, borderRadius: 2 }}
+              >
+                Notice: {complianceData.alerts.needsNotice.length} employees are under the 2-hour requirement for the 15th.
+              </Alert>
+            )}
+          </Box>
+        )}
 
         {/* Filters */}
         <Paper sx={{ p: 3, mb: 4 }}>
@@ -272,6 +354,98 @@ const ManagerDashboard = () => {
             )}
           </Stack>
         </Paper>
+
+        {/* Graphical Overview */}
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          <Grid item xs={12} md={4}>
+            <Card sx={{ height: '100%', borderRadius: 3, boxShadow: 3 }}>
+              <CardContent sx={{ textAlign: 'center' }}>
+                <Typography variant="h6" gutterBottom fontWeight="bold">
+                  Overall Compliance
+                </Typography>
+                <Box sx={{ position: 'relative', height: 200, display: 'flex', justifyContent: 'center', alignItems: 'center', my: 2 }}>
+                  {complianceLoading ? (
+                    <CircularProgress />
+                  ) : complianceData ? (
+                    <>
+                      <Doughnut 
+                        data={{
+                          labels: ['Compliant', 'Non-Compliant'],
+                          datasets: [{
+                            data: [complianceData.overall.compliant, complianceData.overall.total - complianceData.overall.compliant],
+                            backgroundColor: ['#4caf50', '#f44336'],
+                            borderWidth: 0,
+                            cutout: '80%',
+                          }]
+                        }}
+                        options={{
+                          plugins: { legend: { display: false } },
+                          maintainAspectRatio: false,
+                        }}
+                      />
+                      <Box sx={{ position: 'absolute', textAlign: 'center' }}>
+                        <Typography variant="h3" fontWeight="bold">
+                          {complianceData.overall.percentCompliant}%
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          TARGET MET
+                        </Typography>
+                      </Box>
+                    </>
+                  ) : (
+                    <Typography color="text.secondary">No data available</Typography>
+                  )}
+                </Box>
+                <Typography variant="body2" color="text.secondary">
+                  Target: 4 hours by month end
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          
+          <Grid item xs={12} md={8}>
+            <Grid container spacing={2}>
+              {complianceData && Object.entries(complianceData.bySite).map(([siteName, siteStats]) => (
+                <Grid item xs={12} sm={6} key={siteName}>
+                  <Card sx={{ p: 2, borderRadius: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Box sx={{ width: 80, height: 80, position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                      <Doughnut 
+                        data={{
+                          data: [siteStats.compliant, siteStats.total - siteStats.compliant],
+                          datasets: [{
+                            data: [siteStats.compliant, siteStats.total - siteStats.compliant],
+                            backgroundColor: ['#4caf50', '#e0e0e0'],
+                            borderWidth: 0,
+                            cutout: '75%',
+                          }]
+                        }}
+                        options={{ plugins: { legend: { display: false } }, maintainAspectRatio: false }}
+                      />
+                      <Typography variant="caption" fontWeight="bold" sx={{ position: 'absolute' }}>
+                        {siteStats.percentCompliant}%
+                      </Typography>
+                    </Box>
+                    <Box sx={{ flexGrow: 1 }}>
+                      <Typography variant="subtitle1" fontWeight="bold">{siteName}</Typography>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        {siteStats.compliant} / {siteStats.total} compliant
+                      </Typography>
+                      <Button 
+                        size="small" 
+                        variant="text" 
+                        startIcon={<FileDownloadIcon />}
+                        onClick={() => handleDownloadSiteReport(siteName, complianceData.allEmployees.filter(e => e.location === siteName && e.status !== 'compliant'))}
+                        sx={{ mt: 0.5 }}
+                      >
+                        Site Deficiency List
+                      </Button>
+                    </Box>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          </Grid>
+        </Grid>
 
         {/* Statistics Cards */}
         <Grid container spacing={3} sx={{ mb: 4 }}>

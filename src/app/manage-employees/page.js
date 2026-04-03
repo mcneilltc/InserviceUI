@@ -40,6 +40,7 @@ import { Edit as EditIcon, Archive as ArchiveIcon, Add as AddIcon, LocationOn as
 import axios from 'axios';
 import moment from 'moment';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import ImportEmployeesDialog from './ImportEmployeesDialog';
 
 const LOCATIONS = ['MCAC', 'Ramsey Creek Beach', 'Double Oaks', 'Cordelia'];
 
@@ -60,6 +61,7 @@ const ManageEmployees = () => {
   const [selectedLocation, setSelectedLocation] = useState('');
   const [openBulkDialog, setOpenBulkDialog] = useState(false);
   const [bulkLocations, setBulkLocations] = useState([]);
+  const [openImportDialog, setOpenImportDialog] = useState(false);
 
   const { data: employees = [], isLoading: loading, error: queryError } = useQuery({
     queryKey: ['employees'],
@@ -246,6 +248,14 @@ const ManageEmployees = () => {
           <Typography variant="h4" component="h1">
             Manage Employees
           </Typography>
+          <Button
+            variant="outlined"
+            startIcon={<AddIcon />}
+            onClick={() => setOpenImportDialog(true)}
+            sx={{ mr: 1 }}
+          >
+            Import from Excel
+          </Button>
           <Button
             variant="contained"
             startIcon={<AddIcon />}
@@ -514,6 +524,12 @@ const ManageEmployees = () => {
           </Alert>
         </Snackbar>
       </Paper>
+
+      <ImportEmployeesDialog
+        open={openImportDialog}
+        onClose={() => setOpenImportDialog(false)}
+        onImportComplete={() => queryClient.invalidateQueries({ queryKey: ['employees'] })}
+      />
     </Container>
   );
 };
