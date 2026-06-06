@@ -41,6 +41,7 @@ const menuItems = [
   { text: 'Manage Topics', icon: <TopicIcon />, path: '/manage-topics' },
   { text: 'Manage Trainers', icon: <PersonIcon />, path: '/manage-trainers' },
   { text: 'Reports', icon: <AssessmentIcon />, path: '/reports' },
+  { text: 'Employee Portal', icon: <PersonIcon />, path: '/employee' },
 ];
 
 const Layout = ({ children }) => {
