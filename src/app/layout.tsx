@@ -1,6 +1,5 @@
 "use client";
 
-import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
@@ -15,7 +14,6 @@ import { AuthProvider } from "../components/AuthContext";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 
-const inter = Inter({ subsets: ["latin"] });
 
 // Create emotion cache
 const clientSideEmotionCache = createCache({ key: "css" });
@@ -25,7 +23,7 @@ export default function RootLayout({ children }) {
 
   return (
     <html lang="en">
-      <body className={inter.className}>
+      <body>
         <QueryClientProvider client={queryClient}>
         <AuthProvider>
         <CacheProvider value={clientSideEmotionCache}>

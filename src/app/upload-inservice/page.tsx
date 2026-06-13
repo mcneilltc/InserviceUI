@@ -209,7 +209,7 @@ export default function UploadInservicePage() {
         Upload Inservice Sheet
       </Typography>
       <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-        Take a photo of a physical sign-in sheet. We'll automatically extract the trainer, topic,
+        Take a photo of a physical sign-in sheet. We&apos;ll automatically extract the trainer, topic,
         date, time, and attendee names — then let you review before saving.
       </Typography>
 
@@ -300,7 +300,7 @@ export default function UploadInservicePage() {
               <Box sx={{ textAlign: 'center', py: 8, color: 'text.secondary' }}>
                 <AutoFixHighIcon sx={{ fontSize: 64, opacity: 0.3 }} />
                 <Typography variant="body1" sx={{ mt: 1 }}>
-                  Upload an image and click "Extract Data" to see results here
+                  Upload an image and click &quot;Extract Data&quot; to see results here
                 </Typography>
               </Box>
             )}

@@ -2,8 +2,29 @@
 
 import React, { useEffect, useState } from 'react';
 
+interface EmployeeSelfData {
+  employee: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    badgeNumber: string;
+    depth?: string;
+    certificationExpiration?: string;
+  };
+  compliance: {
+    hoursThisMonth: number;
+    message: string;
+  };
+  sessions: Array<{
+    id: string;
+    date: string;
+    topic: string;
+    hours: number;
+  }>;
+}
+
 export default function EmployeeDashboard() {
-  const [data, setData] = useState(null);
+  const [data, setData] = useState<EmployeeSelfData | null>(null);
 
   useEffect(() => {
     try {
@@ -35,7 +56,7 @@ export default function EmployeeDashboard() {
       </div>
       <div style={{ marginTop: 8 }}>{compliance.message}</div>
 
-      <h3 style={{ marginTop: 20 }}>This month's sessions</h3>
+      <h3 style={{ marginTop: 20 }}>This month&apos;s sessions</h3>
       <ul>
         {sessions && sessions.length ? sessions.map(s => (
           <li key={s.id}>{s.date} — {s.topic} — {s.hours} hr</li>

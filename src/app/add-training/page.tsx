@@ -179,7 +179,7 @@ const AddTraining = () => {
   };
 
   const createSessionMutation = useMutation({
-    mutationFn: (sessionData: any) => axios.post(`${BACKEND_URL}/api/training-sessions/${sessionData.trainer[0]}`, sessionData),
+    mutationFn: (sessionData: any) => axios.post(`${BACKEND_URL}/api/training-sessions`, sessionData),
     onSuccess: (response) => {
       setSnackbar({
         open: true,
@@ -199,11 +199,12 @@ const AddTraining = () => {
         status: "scheduled",
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error("Error creating training session:", error);
+      const message = error?.response?.data?.message || "Failed to create training session";
       setSnackbar({
         open: true,
-        message: "Failed to create training session",
+        message,
         severity: "error",
       });
     }
@@ -215,10 +216,26 @@ const AddTraining = () => {
         setSnackbar({ open: true, message: "Please select a trainer", severity: "error" });
         return;
     }
+    if (!formData.date) {
+        setSnackbar({ open: true, message: "Please select a date", severity: "error" });
+        return;
+    }
+    if (!formData.location) {
+        setSnackbar({ open: true, message: "Please select a location", severity: "error" });
+        return;
+    }
+    if (!formData.length) {
+        setSnackbar({ open: true, message: "Please enter session length", severity: "error" });
+        return;
+    }
     const sessionData = {
-      ...formData,
-      date: formData.date ? moment(formData.date).format('YYYY-MM-DD') : null,
-      name: formData.topic || 'Training Session',
+      date: moment(formData.date).format('YYYY-MM-DD'),
+      location: formData.location,
+      startTime: formData.startTime || undefined,
+      length: parseInt(formData.length),
+      topic: formData.topic,
+      trainer: formData.trainer,
+      trainees: []
     };
     createSessionMutation.mutate(sessionData);
   };
