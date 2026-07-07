@@ -181,12 +181,17 @@ const AddTraining = () => {
   const createSessionMutation = useMutation({
     mutationFn: (sessionData: any) => axios.post(`${BACKEND_URL}/api/training-sessions`, sessionData),
     onSuccess: (response) => {
+      const createdSession = response.data?.session || { id: response.data?.sessionId };
       setSnackbar({
         open: true,
         message: "Training session created successfully!",
         severity: "success",
       });
       setCreatedTrainingId(response.data.sessionId);
+      queryClient.setQueryData(['sessions'], (oldData: any[] = []) => {
+        const filtered = oldData.filter((session) => session.id !== createdSession.id);
+        return [createdSession, ...filtered];
+      });
       queryClient.invalidateQueries({ queryKey: ['sessions'] });
       
       setFormData({
