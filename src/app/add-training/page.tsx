@@ -178,6 +178,19 @@ const AddTraining = () => {
     });
   };
 
+  const upsertSessionInCache = (sessionId: string, updatedSession: any) => {
+    queryClient.setQueryData(['sessions'], (oldData: any[] = []) => {
+      const existingSession = oldData.find((session) => session.id === sessionId);
+      if (existingSession) {
+        return oldData.map((session) =>
+          session.id === sessionId ? { ...session, ...updatedSession } : session
+        );
+      }
+
+      return [{ id: sessionId, ...updatedSession }, ...oldData];
+    });
+  };
+
   const createSessionMutation = useMutation({
     mutationFn: (sessionData: any) => axios.post(`${BACKEND_URL}/api/training-sessions`, sessionData),
     onSuccess: (response) => {
@@ -188,10 +201,7 @@ const AddTraining = () => {
         severity: "success",
       });
       setCreatedTrainingId(response.data.sessionId);
-      queryClient.setQueryData(['sessions'], (oldData: any[] = []) => {
-        const filtered = oldData.filter((session) => session.id !== createdSession.id);
-        return [createdSession, ...filtered];
-      });
+      upsertSessionInCache(createdSession.id, createdSession);
       queryClient.invalidateQueries({ queryKey: ['sessions'] });
       
       setFormData({
@@ -282,11 +292,12 @@ const AddTraining = () => {
       // Update the session with the new trainees
       const updatedTrainees = [...new Set([...(session.trainees || []), ...selectedTrainees])];
       
-      await axios.put(`${BACKEND_URL}/api/sessions/${sessionId}`, {
+      const response = await axios.put(`${BACKEND_URL}/api/sessions/${sessionId}`, {
         trainees: updatedTrainees,
       });
-  
-      // Refresh training sessions list
+
+      const updatedSession = response.data?.session || { id: sessionId, trainees: updatedTrainees };
+      upsertSessionInCache(sessionId, updatedSession);
       queryClient.invalidateQueries({ queryKey: ['sessions'] });
   
       setSnackbar({
@@ -343,9 +354,11 @@ const AddTraining = () => {
 
       // Add employee to session trainees
       const updatedTrainees = [...new Set([...(session.trainees || []), employee.id])];
-      await axios.put(`${BACKEND_URL}/api/sessions/${selectedSessionForManualAdd}`, {
+      const response = await axios.put(`${BACKEND_URL}/api/sessions/${selectedSessionForManualAdd}`, {
         trainees: updatedTrainees,
       });
+      const updatedSession = response.data?.session || { id: selectedSessionForManualAdd, trainees: updatedTrainees };
+      upsertSessionInCache(selectedSessionForManualAdd, updatedSession);
 
       setSnackbar({
         open: true,
@@ -396,11 +409,12 @@ const AddTraining = () => {
   const handleCompleteTraining = async (sessionId) => {
     try {
       const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
-      await axios.put(`${BACKEND_URL}/api/sessions/${sessionId}`, {
+      const response = await axios.put(`${BACKEND_URL}/api/sessions/${sessionId}`, {
         status: 'completed',
       });
 
-      // Refresh training sessions list
+      const updatedSession = response.data?.session || { id: sessionId, status: 'completed' };
+      upsertSessionInCache(sessionId, updatedSession);
       queryClient.invalidateQueries({ queryKey: ['sessions'] });
 
       setSnackbar({
