@@ -52,6 +52,7 @@ const ManageEmployees = () => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    alternateEmails: '',
     position: '',
     hireDate: moment(),
     locations: [],
@@ -133,6 +134,7 @@ const ManageEmployees = () => {
       setFormData({
         name: employee.name,
         email: employee.email,
+        alternateEmails: (employee.alternateEmails || []).join(', '),
         position: employee.position,
         hireDate: moment(employee.hireDate),
         locations: employee.locations || [],
@@ -145,6 +147,7 @@ const ManageEmployees = () => {
       setFormData({
         name: '',
         email: '',
+        alternateEmails: '',
         position: '',
         hireDate: moment(),
         locations: [],
@@ -162,6 +165,7 @@ const ManageEmployees = () => {
     setFormData({
       name: '',
       email: '',
+      alternateEmails: '',
       position: '',
       hireDate: moment(),
       locations: [],
@@ -172,13 +176,20 @@ const ManageEmployees = () => {
   };
 
   const handleSubmit = () => {
+    const payload = {
+      ...formData,
+      alternateEmails: formData.alternateEmails
+        .split(',')
+        .map((e) => e.trim())
+        .filter(Boolean),
+    };
     if (editingEmployee) {
       updateMutation.mutate({
         id: editingEmployee.id,
-        ...formData,
+        ...payload,
       });
     } else {
-      createMutation.mutate(formData);
+      createMutation.mutate(payload);
     }
   };
 
@@ -521,6 +532,17 @@ const ManageEmployees = () => {
                       <MenuItem value="all">All locations (company-wide)</MenuItem>
                     </Select>
                   </FormControl>
+                </Grid>
+              )}
+              {formData.isSupervisor && (
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label="Alternate Login Emails"
+                    value={formData.alternateEmails}
+                    onChange={(e) => setFormData({ ...formData, alternateEmails: e.target.value })}
+                    helperText="Comma-separated. Use this if they sign in with more than one email (e.g. personal Google + work Microsoft account)."
+                  />
                 </Grid>
               )}
             </Grid>
