@@ -21,9 +21,9 @@ import axios from 'axios';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
 
-const EmployeeHoursTracker = () => {
+const EmployeeHoursTracker = ({ allowedLocations } = {}) => {
   const [employees, setEmployees] = useState([]);
-  const [locations, setLocations] = useState(['MCAC', 'Cordelia', 'Double Oaks', 'Ramsey Creek Beach']);
+  const [locations] = useState(allowedLocations && allowedLocations.length ? allowedLocations : ['MCAC', 'Cordelia', 'Double Oaks', 'Ramsey Creek Beach']);
   const [selectedLocation, setSelectedLocation] = useState('all');
   const [loading, setLoading] = useState(false);
 
@@ -62,9 +62,13 @@ const EmployeeHoursTracker = () => {
     }
   };
 
-  const filteredEmployees = employees.filter(emp => 
-    selectedLocation === 'all' || emp.location === selectedLocation || emp.workSite === selectedLocation
-  );
+  const filteredEmployees = employees.filter(emp => {
+    const empLocations = emp.locations || [];
+    if (allowedLocations && allowedLocations.length && !empLocations.some(loc => allowedLocations.includes(loc))) {
+      return false;
+    }
+    return selectedLocation === 'all' || empLocations.includes(selectedLocation);
+  });
 
   const getEmployeeStatus = (hours) => {
     const requiredHours = 4;
@@ -152,7 +156,7 @@ const EmployeeHoursTracker = () => {
                     }}
                   >
                     <TableCell>{emp.name}</TableCell>
-                    <TableCell>{emp.location || emp.workSite || 'Unknown'}</TableCell>
+                    <TableCell>{(emp.locations && emp.locations.join(', ')) || 'Unknown'}</TableCell>
                     <TableCell align="right">{emp.totalHours ? emp.totalHours.toFixed(1) : '0.0'}</TableCell>
                     <TableCell align="right">{emp.hoursLeft ? emp.hoursLeft.toFixed(1) : '0.0'}</TableCell>
                     <TableCell>

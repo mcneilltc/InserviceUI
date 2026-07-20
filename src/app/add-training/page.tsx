@@ -139,10 +139,7 @@ const AddTraining = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [openManualAddDialog, setOpenManualAddDialog] = useState(false);
   const [manualEmployeeData, setManualEmployeeData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    location: '',
+    employeeId: '',
   });
   const [selectedSessionForManualAdd, setSelectedSessionForManualAdd] = useState(null);
 
@@ -324,36 +321,20 @@ const AddTraining = () => {
 
   const handleSubmitManualEmployee = async () => {
     try {
-      if (!selectedSessionForManualAdd) return;
+      if (!selectedSessionForManualAdd || !manualEmployeeData.employeeId) return;
 
       const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
-      
-      // Submit check-in for the manually added employee
+
+      // Check the employee in directly — the trainer is vouching for their attendance
       await axios.post(`${BACKEND_URL}/api/checkin`, {
         sessionId: selectedSessionForManualAdd,
-        ...manualEmployeeData,
+        employeeId: manualEmployeeData.employeeId,
       });
 
-      // Also add to session trainees if needed
+      // Also add to session trainees list
       const sessionResponse = await axios.get(`${BACKEND_URL}/api/sessions/${selectedSessionForManualAdd}`);
       const session = sessionResponse.data;
-      
-      // Create or find employee and add to session
-      const employeesResponse = await axios.get(`${BACKEND_URL}/api/employees`);
-      let employee = employeesResponse.data.find(emp => emp.email === manualEmployeeData.email);
-      
-      if (!employee) {
-        // Create new employee
-        const newEmployeeResponse = await axios.post(`${BACKEND_URL}/api/employees`, {
-          name: manualEmployeeData.name,
-          email: manualEmployeeData.email,
-          location: manualEmployeeData.location,
-        });
-        employee = { id: newEmployeeResponse.data.id };
-      }
-
-      // Add employee to session trainees
-      const updatedTrainees = [...new Set([...(session.trainees || []), employee.id])];
+      const updatedTrainees = [...new Set([...(session.trainees || []), manualEmployeeData.employeeId])];
       const response = await axios.put(`${BACKEND_URL}/api/sessions/${selectedSessionForManualAdd}`, {
         trainees: updatedTrainees,
       });
@@ -362,26 +343,22 @@ const AddTraining = () => {
 
       setSnackbar({
         open: true,
-        message: "Employee added manually to training session!",
+        message: "Employee checked in manually!",
         severity: "success",
       });
-      
+
       setOpenManualAddDialog(false);
-      setManualEmployeeData({
-        name: '',
-        email: '',
-        phone: '',
-        location: '',
-      });
+      setManualEmployeeData({ employeeId: '' });
       setSelectedSessionForManualAdd(null);
-      
+
       // Refresh training sessions
       queryClient.invalidateQueries({ queryKey: ['sessions'] });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error manually adding employee:", error);
+      const message = error.response?.data?.message || "Failed to add employee manually";
       setSnackbar({
         open: true,
-        message: "Failed to add employee manually",
+        message,
         severity: "error",
       });
     }
@@ -409,24 +386,24 @@ const AddTraining = () => {
   const handleCompleteTraining = async (sessionId) => {
     try {
       const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
-      const response = await axios.put(`${BACKEND_URL}/api/sessions/${sessionId}`, {
-        status: 'completed',
-      });
+      const response = await axios.post(`${BACKEND_URL}/api/sessions/${sessionId}/close`);
 
-      const updatedSession = response.data?.session || { id: sessionId, status: 'completed' };
-      upsertSessionInCache(sessionId, updatedSession);
       queryClient.invalidateQueries({ queryKey: ['sessions'] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['trainers'] });
 
+      const { employeesCredited, totalEmployeeHours, trainersCredited } = response.data;
       setSnackbar({
         open: true,
-        message: "Training marked as completed!",
+        message: `Session closed out — ${employeesCredited} employee(s) credited (${totalEmployeeHours} total hrs), ${trainersCredited} trainer(s) credited.`,
         severity: "success",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error completing training:", error);
+      const message = error.response?.data?.message || "Failed to complete training";
       setSnackbar({
         open: true,
-        message: "Failed to complete training",
+        message,
         severity: "error",
       });
     }
@@ -968,7 +945,7 @@ const AddTraining = () => {
                                 <AddIcon />
                               </IconButton>
                             </Tooltip>
-                            <Tooltip title="Mark as Completed">
+                            <Tooltip title="Close Out Session & Credit Hours">
                               <IconButton
                                 edge="end"
                                 onClick={() =>
@@ -1121,46 +1098,23 @@ const AddTraining = () => {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Manually Add Employee to Training</DialogTitle>
+        <DialogTitle>Manually Check In Employee</DialogTitle>
         <DialogContent>
           <Typography variant="body2" gutterBottom sx={{ mb: 2 }}>
-            Use this form to manually add an employee when the QR code fails to scan.
+            Use this when the QR code fails to scan. Select the employee from existing records —
+            their check-in time is recorded as right now.
           </Typography>
-          <TextField
-            fullWidth
-            label="Name"
-            value={manualEmployeeData.name}
-            onChange={(e) => setManualEmployeeData({ ...manualEmployeeData, name: e.target.value })}
-            required
-            sx={{ mb: 2 }}
-          />
-          {/* <TextField
-            fullWidth
-            label="Email"
-            type="email"
-            value={manualEmployeeData.email}
-            onChange={(e) => setManualEmployeeData({ ...manualEmployeeData, email: e.target.value })}
-            required
-            sx={{ mb: 2 }}
-          /> */}
-          {/* <TextField
-            fullWidth
-            label="Phone"
-            value={manualEmployeeData.phone}
-            onChange={(e) => setManualEmployeeData({ ...manualEmployeeData, phone: e.target.value })}
-            required
-            sx={{ mb: 2 }}
-          /> */}
           <FormControl fullWidth required sx={{ mb: 2 }}>
-            <InputLabel>Location</InputLabel>
+            <InputLabel>Employee</InputLabel>
             <Select
-              value={manualEmployeeData.location}
-              onChange={(e) => setManualEmployeeData({ ...manualEmployeeData, location: e.target.value })}
+              value={manualEmployeeData.employeeId}
+              label="Employee"
+              onChange={(e) => setManualEmployeeData({ employeeId: e.target.value })}
             >
-              <MenuItem value="">Select Location</MenuItem>
-              {locations.map((location) => (
-                <MenuItem key={location} value={location}>
-                  {location}
+              <MenuItem value="">Select Employee</MenuItem>
+              {employees.map((employee) => (
+                <MenuItem key={employee.id} value={employee.id}>
+                  {employee.name}
                 </MenuItem>
               ))}
             </Select>
@@ -1168,8 +1122,8 @@ const AddTraining = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenManualAddDialog(false)}>Cancel</Button>
-          <Button onClick={handleSubmitManualEmployee} variant="contained" disabled={!manualEmployeeData.name || !manualEmployeeData.email || !manualEmployeeData.phone || !manualEmployeeData.location}>
-            Add Employee
+          <Button onClick={handleSubmitManualEmployee} variant="contained" disabled={!manualEmployeeData.employeeId}>
+            Check In Employee
           </Button>
         </DialogActions>
       </Dialog>

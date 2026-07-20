@@ -31,6 +31,7 @@ import {
   Snackbar,
   Chip,
   Checkbox,
+  FormControlLabel,
   Card,
   CardContent,
   Stack,
@@ -54,6 +55,9 @@ const ManageEmployees = () => {
     position: '',
     hireDate: moment(),
     locations: [],
+    badgeNumber: '',
+    isSupervisor: false,
+    supervisorScope: 'locations',
   });
   const [activeTab, setActiveTab] = useState(0);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
@@ -132,6 +136,9 @@ const ManageEmployees = () => {
         position: employee.position,
         hireDate: moment(employee.hireDate),
         locations: employee.locations || [],
+        badgeNumber: employee.badgeNumber || '',
+        isSupervisor: employee.isSupervisor || false,
+        supervisorScope: employee.supervisorScope || 'locations',
       });
     } else {
       setEditingEmployee(null);
@@ -141,6 +148,9 @@ const ManageEmployees = () => {
         position: '',
         hireDate: moment(),
         locations: [],
+        badgeNumber: '',
+        isSupervisor: false,
+        supervisorScope: 'locations',
       });
     }
     setOpenDialog(true);
@@ -155,6 +165,9 @@ const ManageEmployees = () => {
       position: '',
       hireDate: moment(),
       locations: [],
+      badgeNumber: '',
+      isSupervisor: false,
+      supervisorScope: 'locations',
     });
   };
 
@@ -349,7 +362,9 @@ const ManageEmployees = () => {
                 <TableCell>Name</TableCell>
                 <TableCell>Email</TableCell>
                 <TableCell>Position</TableCell>
+                <TableCell>Badge #</TableCell>
                 <TableCell>Locations</TableCell>
+                <TableCell>Role</TableCell>
                 <TableCell>Hire Date</TableCell>
                 {activeTab === 0 && <TableCell>Actions</TableCell>}
               </TableRow>
@@ -366,6 +381,7 @@ const ManageEmployees = () => {
                   <TableCell>{employee.name}</TableCell>
                   <TableCell>{employee.email}</TableCell>
                   <TableCell>{employee.position}</TableCell>
+                  <TableCell>{employee.badgeNumber || '—'}</TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
                       {(employee.locations || []).map((location) => (
@@ -378,6 +394,15 @@ const ManageEmployees = () => {
                         />
                       ))}
                     </Box>
+                  </TableCell>
+                  <TableCell>
+                    {employee.isSupervisor ? (
+                      <Chip
+                        label={employee.supervisorScope === 'all' ? 'Supervisor (all sites)' : 'Supervisor'}
+                        size="small"
+                        color="secondary"
+                      />
+                    ) : '—'}
                   </TableCell>
                   <TableCell>{moment(employee.hireDate).format('MMM D, YYYY')}</TableCell>
                   {activeTab === 0 && (
@@ -432,6 +457,15 @@ const ManageEmployees = () => {
                 />
               </Grid>
               <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Badge Number"
+                  value={formData.badgeNumber}
+                  onChange={(e) => setFormData({ ...formData, badgeNumber: e.target.value })}
+                  helperText="Used by employees to look themselves up on the self check-in page"
+                />
+              </Grid>
+              <Grid item xs={12}>
                 <FormControl fullWidth required>
                   <InputLabel>Locations</InputLabel>
                   <Select
@@ -463,6 +497,32 @@ const ManageEmployees = () => {
                   slotProps={{ textField: { fullWidth: true, required: true } }}
                 />
               </Grid>
+              <Grid item xs={12}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={formData.isSupervisor}
+                      onChange={(e) => setFormData({ ...formData, isSupervisor: e.target.checked })}
+                    />
+                  }
+                  label="This employee is a supervisor (gets dashboard access to track training hours)"
+                />
+              </Grid>
+              {formData.isSupervisor && (
+                <Grid item xs={12}>
+                  <FormControl fullWidth>
+                    <InputLabel>Supervisor Scope</InputLabel>
+                    <Select
+                      value={formData.supervisorScope}
+                      label="Supervisor Scope"
+                      onChange={(e) => setFormData({ ...formData, supervisorScope: e.target.value })}
+                    >
+                      <MenuItem value="locations">Their assigned location(s) only</MenuItem>
+                      <MenuItem value="all">All locations (company-wide)</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+              )}
             </Grid>
           </DialogContent>
           <DialogActions>

@@ -48,8 +48,16 @@ ChartJS.register(ArcElement, ChartTooltip, Legend);
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
 
+const ALL_SITES = ['MCAC', 'Cordelia', 'Double Oaks', 'Ramsey Creek Beach'];
+
 const ManagerDashboard = () => {
   const { user } = useAuth();
+  const isScopedSupervisor = user?.role === 'supervisor' && user?.supervisorScope === 'locations';
+  const allowedSites = isScopedSupervisor && user.supervisorLocations?.length ? user.supervisorLocations : ALL_SITES;
+  // When a scoped supervisor picks "All Sites" it means all of *their* sites, not company-wide —
+  // the backend supports a comma-separated site list for this.
+  const scopedSitesParam = isScopedSupervisor ? allowedSites.join(',') : undefined;
+
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -58,7 +66,7 @@ const ManagerDashboard = () => {
   const [completedSessions, setCompletedSessions] = useState([]);
   const [complianceData, setComplianceData] = useState(null);
   const [complianceLoading, setComplianceLoading] = useState(false);
-  
+
   // Filter states
   const [workSite, setWorkSite] = useState('all');
   const [period, setPeriod] = useState('month');
@@ -68,7 +76,8 @@ const ManagerDashboard = () => {
   const [employeeFilter, setEmployeeFilter] = useState('all');
   const [checkInLocationFilter, setCheckInLocationFilter] = useState('all');
 
-  const workSites = ['all', 'MCAC', 'Cordelia', 'Double Oaks', 'Ramsey Creek Beach'];
+  const workSites = ['all', ...allowedSites];
+  const inScope = (location) => !isScopedSupervisor || allowedSites.includes(location);
 
   useEffect(() => {
     fetchEmployees();
@@ -83,12 +92,14 @@ const ManagerDashboard = () => {
     try {
       const response = await axios.get(`${BACKEND_URL}/api/sessions`);
       let completed = response.data.filter(s => s.status === 'completed');
-      
-      // Filter by workSite if specified
+
+      // Filter by workSite if specified, else restrict to the supervisor's scope
       if (workSite !== 'all') {
         completed = completed.filter(s => s.location === workSite);
+      } else if (isScopedSupervisor) {
+        completed = completed.filter(s => inScope(s.location));
       }
-      
+
       setCompletedSessions(completed);
     } catch (error) {
       console.error('Error fetching completed sessions:', error);
@@ -113,7 +124,7 @@ const ManagerDashboard = () => {
         period: period !== 'custom' ? period : undefined,
         startDate: period === 'custom' ? startDate.toISOString() : undefined,
         endDate: period === 'custom' ? endDate.toISOString() : undefined,
-        workSite: workSite !== 'all' ? workSite : undefined,
+        workSite: workSite !== 'all' ? workSite : scopedSitesParam,
       };
 
       const response = await axios.get(`${BACKEND_URL}/api/dashboard/stats`, { params });
@@ -133,7 +144,37 @@ const ManagerDashboard = () => {
         month: startDate.format('YYYY-MM'),
       };
       const response = await axios.get(`${BACKEND_URL}/api/compliance/status`, { params });
-      setComplianceData(response.data);
+      let data = response.data;
+
+      // This endpoint doesn't support site filtering server-side — scope it here for a
+      // location-limited supervisor.
+      if (isScopedSupervisor && data) {
+        const scopedEmployees = data.allEmployees.filter(e => inScope(e.location));
+        const scopedBySite = Object.fromEntries(
+          Object.entries(data.bySite).filter(([site]) => inScope(site))
+        );
+        const compliantCount = scopedEmployees.filter(e => e.status === 'compliant').length;
+        data = {
+          ...data,
+          allEmployees: scopedEmployees,
+          bySite: scopedBySite,
+          overall: {
+            total: scopedEmployees.length,
+            compliant: compliantCount,
+            partial: scopedEmployees.filter(e => e.status === 'partial').length,
+            atRisk: scopedEmployees.filter(e => e.status === 'at_risk').length,
+            zero: scopedEmployees.filter(e => e.status === 'zero').length,
+            percentCompliant: scopedEmployees.length > 0 ? Math.round((compliantCount / scopedEmployees.length) * 100) : 0,
+          },
+          alerts: {
+            midMonth: data.alerts.midMonth.filter(e => inScope(e.location)),
+            needsNotice: data.alerts.needsNotice.filter(e => inScope(e.location)),
+            endOfMonth: data.alerts.endOfMonth.filter(e => inScope(e.location)),
+          },
+        };
+      }
+
+      setComplianceData(data);
     } catch (error) {
       console.error('Error fetching compliance status:', error);
     } finally {
@@ -145,14 +186,16 @@ const ManagerDashboard = () => {
     try {
       const response = await axios.get(`${BACKEND_URL}/api/checkin`);
       let checkInsData = response.data || [];
-      
-      // Filter by location if specified
+
+      // Filter by location if specified, else restrict to the supervisor's scope
       if (checkInLocationFilter !== 'all') {
-        checkInsData = checkInsData.filter(checkIn => 
+        checkInsData = checkInsData.filter(checkIn =>
           checkIn.location === checkInLocationFilter
         );
+      } else if (isScopedSupervisor) {
+        checkInsData = checkInsData.filter(checkIn => inScope(checkIn.location));
       }
-      
+
       setCheckIns(checkInsData);
     } catch (error) {
       console.error('Error fetching check-ins:', error);
@@ -195,7 +238,7 @@ const ManagerDashboard = () => {
   const handleDownloadReport = async () => {
     try {
       const params = {
-        workSite: workSite !== 'all' ? workSite : undefined,
+        workSite: workSite !== 'all' ? workSite : scopedSitesParam,
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
       };
@@ -603,7 +646,7 @@ const ManagerDashboard = () => {
         </Paper>
 
         {/* Employee Hours Tracker */}
-        <EmployeeHoursTracker />
+        <EmployeeHoursTracker allowedLocations={isScopedSupervisor ? allowedSites : null} />
 
         {/* Completed Trainings */}
         <Paper sx={{ p: 4, mt: 4 }}>

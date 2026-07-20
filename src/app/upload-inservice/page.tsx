@@ -38,9 +38,21 @@ interface FormState {
   topic: string;         // topic ID
   date: string;
   startTime: string;
+  endTime: string;
   length: string;
   location: string;
   employees: EmployeeRow[];
+}
+
+// Compute duration in hours (rounded to 2dp) from HH:MM start/end times
+function computeDurationHours(startTime: string, endTime: string): string {
+  if (!startTime || !endTime) return '';
+  const [startH, startM] = startTime.split(':').map(Number);
+  const [endH, endM] = endTime.split(':').map(Number);
+  if ([startH, startM, endH, endM].some((n) => Number.isNaN(n))) return '';
+  let minutes = (endH * 60 + endM) - (startH * 60 + startM);
+  if (minutes < 0) minutes += 24 * 60; // crossed midnight
+  return String(Math.round((minutes / 60) * 100) / 100);
 }
 
 // ---------------------------------------------------------------------------
@@ -110,7 +122,8 @@ export default function UploadInservicePage() {
         topic: matched.topic.matchedId || '',
         date: extracted.date || '',
         startTime: extracted.startTime || '',
-        length: extracted.length != null ? String(extracted.length) : '',
+        endTime: extracted.endTime || '',
+        length: extracted.length != null ? String(extracted.length) : computeDurationHours(extracted.startTime || '', extracted.endTime || ''),
         location: extracted.location || '',
         employees: matched.employees.map((emp: any) => ({
           extractedName: emp.extractedName,
@@ -343,7 +356,7 @@ export default function UploadInservicePage() {
                   </Grid>
 
                   {/* Date */}
-                  <Grid item xs={12} sm={4}>
+                  <Grid item xs={12} sm={3}>
                     <TextField
                       fullWidth
                       label="Date"
@@ -355,19 +368,31 @@ export default function UploadInservicePage() {
                   </Grid>
 
                   {/* Start time */}
-                  <Grid item xs={12} sm={4}>
+                  <Grid item xs={12} sm={3}>
                     <TextField
                       fullWidth
                       label="Start Time"
                       type="time"
                       value={form.startTime}
-                      onChange={e => setForm(f => f ? { ...f, startTime: e.target.value } : f)}
+                      onChange={e => setForm(f => f ? { ...f, startTime: e.target.value, length: computeDurationHours(e.target.value, f.endTime) || f.length } : f)}
                       InputLabelProps={{ shrink: true }}
                     />
                   </Grid>
 
-                  {/* Duration */}
-                  <Grid item xs={12} sm={4}>
+                  {/* End time */}
+                  <Grid item xs={12} sm={3}>
+                    <TextField
+                      fullWidth
+                      label="End Time"
+                      type="time"
+                      value={form.endTime}
+                      onChange={e => setForm(f => f ? { ...f, endTime: e.target.value, length: computeDurationHours(f.startTime, e.target.value) || f.length } : f)}
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  </Grid>
+
+                  {/* Duration (auto-computed from start/end, overridable) */}
+                  <Grid item xs={12} sm={3}>
                     <TextField
                       fullWidth
                       label="Duration (hours)"
@@ -375,6 +400,7 @@ export default function UploadInservicePage() {
                       inputProps={{ step: 0.5, min: 0 }}
                       value={form.length}
                       onChange={e => setForm(f => f ? { ...f, length: e.target.value } : f)}
+                      helperText="Auto-filled from start/end time"
                     />
                   </Grid>
 

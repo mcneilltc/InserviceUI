@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Container,
   Paper,
@@ -10,6 +10,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  TextField,
   Box,
   Alert,
   CircularProgress,
@@ -24,34 +25,19 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterMoment } from '@mui/x-date-pickers/AdapterMoment';
 import axios from 'axios';
+import moment from 'moment';
+
+const LOCATIONS = ['MCAC', 'Ramsey Creek Beach', 'Double Oaks', 'Cordelia'];
 
 const Reports = () => {
-  // State for filters
+  // State for filters — these match what routes/reports.ts actually supports
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
-  const [selectedTopic, setSelectedTopic] = useState('');
-  const [selectedTrainer, setSelectedTrainer] = useState('');
+  const [nameFilter, setNameFilter] = useState('');
+  const [workSite, setWorkSite] = useState('');
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState([]);
-  const [topics, setTopics] = useState([]);
-  const [trainers, setTrainers] = useState([]);
   const [error, setError] = useState('');
-
-  // Fetch topics and trainers on component mount
-  useEffect(() => {
-    const fetchFilters = async () => {
-      try {
-        const topicsResponse = await axios.get('/api/topics');
-        const trainersResponse = await axios.get('/api/trainers');
-        setTopics(topicsResponse.data);
-        setTrainers(trainersResponse.data);
-      } catch (err) {
-        console.error('Error fetching filters:', err);
-        setError('Failed to load filter options.');
-      }
-    };
-    fetchFilters();
-  }, []);
 
   // Fetch report data based on selected criteria
   const fetchReportData = async () => {
@@ -60,10 +46,10 @@ const Reports = () => {
     try {
       const response = await axios.get('/api/reports', {
         params: {
-          startDate: startDate ? startDate.format('YYYY-MM-DD') : null,
-          endDate: endDate ? endDate.format('YYYY-MM-DD') : null,
-          topic: selectedTopic,
-          trainer: selectedTrainer,
+          startDate: startDate ? startDate.format('YYYY-MM-DD') : undefined,
+          endDate: endDate ? endDate.format('YYYY-MM-DD') : undefined,
+          name: nameFilter || undefined,
+          workSite: workSite || undefined,
         },
       });
       setReportData(response.data);
@@ -89,7 +75,7 @@ const Reports = () => {
                 label="Start Date"
                 value={startDate}
                 onChange={(date) => setStartDate(date)}
-                renderInput={(params) => <FormControl fullWidth>{params.input}</FormControl>}
+                slotProps={{ textField: { fullWidth: true } }}
               />
             </LocalizationProvider>
           </Grid>
@@ -99,46 +85,40 @@ const Reports = () => {
                 label="End Date"
                 value={endDate}
                 onChange={(date) => setEndDate(date)}
-                renderInput={(params) => <FormControl fullWidth>{params.input}</FormControl>}
+                slotProps={{ textField: { fullWidth: true } }}
               />
             </LocalizationProvider>
           </Grid>
 
-          {/* Training Topic Filter */}
+          {/* Name Filter */}
           <Grid item xs={12} md={6}>
-  <FormControl fullWidth>
-    <InputLabel>Training Topic</InputLabel>
-    <Select
-      value={selectedTopic}
-      onChange={(e) => setSelectedTopic(e.target.value)}
-    >
-      <MenuItem value="">All Topics</MenuItem>
-      {topics.map((topic) => (
-        <MenuItem key={`topic-${topic.id}`} value={topic.id}>
-          {topic.name}
-        </MenuItem>
-      ))}
-    </Select>
-  </FormControl>
-</Grid>
+            <TextField
+              fullWidth
+              label="Name"
+              value={nameFilter}
+              onChange={(e) => setNameFilter(e.target.value)}
+            />
+          </Grid>
 
-{/* Trainer Filter */}
-<Grid item xs={12} md={6}>
-  <FormControl fullWidth>
-    <InputLabel>Trainer</InputLabel>
-    <Select
-      value={selectedTrainer}
-      onChange={(e) => setSelectedTrainer(e.target.value)}
-    >
-      <MenuItem value="">All Trainers</MenuItem>
-      {trainers.map((trainer) => (
-        <MenuItem key={`trainer-${trainer.id}`} value={trainer.name}>
-          {trainer.name}
-        </MenuItem>
-      ))}
-    </Select>
-  </FormControl>
-</Grid>
+          {/* Work Site Filter */}
+          <Grid item xs={12} md={6}>
+            <FormControl fullWidth>
+              <InputLabel>Work Site</InputLabel>
+              <Select
+                value={workSite}
+                label="Work Site"
+                onChange={(e) => setWorkSite(e.target.value)}
+              >
+                <MenuItem value="">All Sites</MenuItem>
+                {LOCATIONS.map((location) => (
+                  <MenuItem key={location} value={location}>
+                    {location}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+
           {/* Fetch Report Button */}
           <Grid item xs={12}>
             <Button
@@ -165,21 +145,23 @@ const Reports = () => {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>Date</TableCell>
-                <TableCell>Topic</TableCell>
-                <TableCell>Trainer</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Trainees</TableCell>
+                <TableCell>Name</TableCell>
+                <TableCell>Email</TableCell>
+                <TableCell>Phone</TableCell>
+                <TableCell>Work Site</TableCell>
+                <TableCell>Check-in Time</TableCell>
+                <TableCell>Training Hours Completed</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {reportData.map((session) => (
-                <TableRow key={session.id}>
-                  <TableCell>{session.date}</TableCell>
-                  <TableCell>{session.topic}</TableCell>
-                  <TableCell>{session.trainer}</TableCell>
-                  <TableCell>{session.status}</TableCell>
-                  <TableCell>{session.trainees.join(', ')}</TableCell>
+              {reportData.map((checkin, index) => (
+                <TableRow key={`${checkin.email}-${checkin.checkinTime}-${index}`}>
+                  <TableCell>{checkin.name}</TableCell>
+                  <TableCell>{checkin.email}</TableCell>
+                  <TableCell>{checkin.phone}</TableCell>
+                  <TableCell>{checkin.workSite}</TableCell>
+                  <TableCell>{checkin.checkinTime ? moment(checkin.checkinTime).format('MMM D, YYYY h:mm A') : ''}</TableCell>
+                  <TableCell>{checkin.trainingHoursCompleted}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

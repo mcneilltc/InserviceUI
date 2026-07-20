@@ -1,15 +1,45 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import React from 'react';
+import Link from 'next/link';
+import { Box, Button, Container, Paper, Typography, Stack } from '@mui/material';
+import { AccessTime as AccessTimeIcon, Login as LoginIcon } from '@mui/icons-material';
 
 export default function Home() {
-  const router = useRouter();
+  return (
+    <Container maxWidth="sm">
+      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: '100vh', justifyContent: 'center', py: 6 }}>
+        <Paper sx={{ p: 5, width: '100%', textAlign: 'center' }}>
+          <Typography variant="h4" fontWeight={700} gutterBottom>
+            iTrain
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
+            Check your inservice training hours, or sign in if you're staff.
+          </Typography>
 
-  // Redirect to manager dashboard
-  React.useEffect(() => {
-    router.push('/manager-dashboard');
-  }, [router]);
-
-  return null;
+          <Stack spacing={2}>
+            <Button
+              component={Link}
+              href="/employee"
+              variant="contained"
+              size="large"
+              fullWidth
+              startIcon={<AccessTimeIcon />}
+            >
+              Check My Hours
+            </Button>
+            <Button
+              component={Link}
+              href="/login"
+              variant="outlined"
+              size="large"
+              fullWidth
+              startIcon={<LoginIcon />}
+            >
+              Staff Login
+            </Button>
+          </Stack>
+        </Paper>
+      </Box>
+    </Container>
+  );
 }

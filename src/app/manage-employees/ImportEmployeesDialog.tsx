@@ -24,6 +24,7 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost
 // Expected columns from the inservice tracking spreadsheet
 const KNOWN_COLUMNS = {
   'Guard Name': 'name',
+  'Badge Number': 'badgeNumber',
   'Site': 'site',
   'Depth': 'depth',
   'Certification Expiration': 'certExpiration',
@@ -37,6 +38,7 @@ const KNOWN_COLUMNS = {
 
 const APP_FIELDS = [
   { value: 'name',             label: 'Guard Name *' },
+  { value: 'badgeNumber',      label: 'Badge Number' },
   { value: 'site',             label: 'Site / Location *' },
   { value: 'depth',            label: 'Pool Depth (7ft / 13ft)' },
   { value: 'certExpiration',   label: 'Certification Expiration' },
@@ -148,6 +150,7 @@ export default function ImportEmployeesDialog({ open, onClose, onImportComplete 
         name,
         email: emp.email || '',
         position: emp.depth ? `Lifeguard - ${emp.depth}` : 'Lifeguard',
+        badgeNumber: emp.badgeNumber ? String(emp.badgeNumber).trim() : '',
         locations: emp.site ? [emp.site] : [],
         depth: emp.depth || null,
         certificationExpiration: emp.certExpiration || null,
@@ -291,6 +294,7 @@ export default function ImportEmployeesDialog({ open, onClose, onImportComplete 
                 <TableHead>
                   <TableRow>
                     <TableCell>Name</TableCell>
+                    <TableCell>Badge #</TableCell>
                     <TableCell>Site</TableCell>
                     <TableCell>Depth</TableCell>
                     <TableCell>Cert Expiry</TableCell>
@@ -306,6 +310,7 @@ export default function ImportEmployeesDialog({ open, onClose, onImportComplete 
                   {preview.map((row, i) => (
                     <TableRow key={i}>
                       <TableCell>{row.name}</TableCell>
+                      <TableCell>{row.badgeNumber}</TableCell>
                       <TableCell>{row.site}</TableCell>
                       <TableCell>{row.depth}</TableCell>
                       <TableCell>{row.certExpiration}</TableCell>

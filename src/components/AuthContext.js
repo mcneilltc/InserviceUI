@@ -39,11 +39,12 @@ export const AuthProvider = ({ children }) => {
     };
   }, [user, lastActivity, router]);
 
-  // Call this on successful login
-  const login = useCallback((userData) => {
+  // Call this on successful login. redirectTo defaults based on role if not provided.
+  const login = useCallback((userData, redirectTo) => {
     setUser(userData);
     setLastActivity(Date.now());
-    router.push('/manager-dashboard');
+    const destination = redirectTo || (userData.role === 'trainer' ? '/add-training' : '/manager-dashboard');
+    router.push(destination);
   }, [router]);
 
   // Call this on logout

@@ -10,7 +10,7 @@ import createCache from "@emotion/cache";
 import theme from "../styles/theme";
 import Layout from "../components/Layout";
 import { AuthProvider } from "../components/AuthContext";
-// import AuthGuard from "../components/AuthGuard";
+import ProtectedRoute from "../components/ProtectedRoute";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
@@ -19,10 +19,14 @@ import { usePathname } from "next/navigation";
 // Create emotion cache
 const clientSideEmotionCache = createCache({ key: "css" });
 
+const PUBLIC_PREFIXES = ['/employee', '/checkin'];
+const PUBLIC_EXACT = ['/', '/login'];
+
 export default function RootLayout({ children }) {
   const [queryClient] = useState(() => new QueryClient());
   const pathname = usePathname();
   const isEmployeePortal = pathname?.startsWith('/employee');
+  const isPublicPath = PUBLIC_EXACT.includes(pathname) || PUBLIC_PREFIXES.some((p) => pathname?.startsWith(p));
 
   return (
     <html lang="en">
@@ -33,10 +37,14 @@ export default function RootLayout({ children }) {
           <ThemeProvider theme={theme}>
             <LocalizationProvider dateAdapter={AdapterDateFns}>
               <CssBaseline />
-              {isEmployeePortal ? (
+              {isPublicPath ? (
+                children
+              ) : isEmployeePortal ? (
                 children
               ) : (
-                <Layout>{children}</Layout>
+                <Layout>
+                  <ProtectedRoute pathname={pathname}>{children}</ProtectedRoute>
+                </Layout>
               )}
             </LocalizationProvider>
           </ThemeProvider>

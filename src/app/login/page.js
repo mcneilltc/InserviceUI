@@ -19,7 +19,7 @@ const LoginPage = () => {
 
   useEffect(() => {
     if (user) {
-      router.push('/manager-dashboard');
+      router.push(user.role === 'trainer' ? '/add-training' : '/manager-dashboard');
     } else {
       setLoading(false);
     }
@@ -30,10 +30,20 @@ const LoginPage = () => {
       const response = await axios.post(`${BACKEND_URL}/api/admin/check-whitelist`, {
         email: userData.email
       });
-      
-      if (response.data.isWhitelisted) {
-        login(userData);
-        router.push('/manager-dashboard');
+
+      const { isWhitelisted, role, name, supervisorScope, supervisorLocations, employeeId, trainerId } = response.data;
+
+      if (isWhitelisted) {
+        const fullUser = {
+          ...userData,
+          name: name || userData.name,
+          role,
+          supervisorScope: supervisorScope || null,
+          supervisorLocations: supervisorLocations || [],
+          employeeId: employeeId || null,
+          trainerId: trainerId || null,
+        };
+        login(fullUser, role === 'trainer' ? '/add-training' : '/manager-dashboard');
       } else {
         setWhitelistError('Your email is not authorized to access this application. Please contact an administrator.');
       }
@@ -41,7 +51,7 @@ const LoginPage = () => {
       console.error('Error checking whitelist:', error);
       setWhitelistError('Failed to verify access. Please try again.');
     }
-  }, [login, router]);
+  }, [login]);
 
   useEffect(() => {
     // Handle Microsoft callback

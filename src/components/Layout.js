@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import {
   AppBar,
   Box,
+  Button,
   Drawer,
   IconButton,
   List,
@@ -26,22 +27,23 @@ import {
   Person as PersonIcon,
   Assessment as AssessmentIcon,
   CloudUpload as CloudUploadIcon,
+  Logout as LogoutIcon,
 } from '@mui/icons-material';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import GoogleAuth from '@/components/GoogleAuth';
-// import MicrosoftAuth from './MicrosoftAuth';
+import { useAuth } from './AuthContext';
 
 const drawerWidth = 240;
 
-const menuItems = [
-  { text: 'Dashboard', icon: <DashboardIcon />, path: '/manager-dashboard' },
-  { text: 'Add Training', icon: <AddIcon />, path: '/add-training' },
-  { text: 'Upload Sheet', icon: <CloudUploadIcon />, path: '/upload-inservice' },
-  { text: 'Manage Topics', icon: <TopicIcon />, path: '/manage-topics' },
-  { text: 'Manage Trainers', icon: <PersonIcon />, path: '/manage-trainers' },
-  { text: 'Reports', icon: <AssessmentIcon />, path: '/reports' },
-  { text: 'Employee Portal', icon: <PersonIcon />, path: '/employee' },
+const ALL_MENU_ITEMS = [
+  { text: 'Dashboard', icon: <DashboardIcon />, path: '/manager-dashboard', roles: ['supervisor'] },
+  { text: 'Add Training', icon: <AddIcon />, path: '/add-training', roles: ['supervisor', 'trainer'] },
+  { text: 'Upload Sheet', icon: <CloudUploadIcon />, path: '/upload-inservice', roles: ['supervisor', 'trainer'] },
+  { text: 'Manage Employees', icon: <PeopleIcon />, path: '/manage-employees', roles: ['supervisor'] },
+  { text: 'Manage Topics', icon: <TopicIcon />, path: '/manage-topics', roles: ['supervisor'] },
+  { text: 'Manage Trainers', icon: <PersonIcon />, path: '/manage-trainers', roles: ['supervisor'] },
+  { text: 'Reports', icon: <AssessmentIcon />, path: '/reports', roles: ['supervisor', 'trainer'] },
+  { text: 'Employee Portal', icon: <PersonIcon />, path: '/employee', roles: ['supervisor', 'trainer'] },
 ];
 
 const Layout = ({ children }) => {
@@ -50,6 +52,8 @@ const Layout = ({ children }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const pathname = usePathname();
+  const { user, logout } = useAuth();
+  const menuItems = ALL_MENU_ITEMS.filter((item) => !user || item.roles.includes(user.role));
 
   useEffect(() => {
     setMounted(true);
@@ -111,9 +115,17 @@ const Layout = ({ children }) => {
           <Typography variant="h6" noWrap component="div">
             {menuItems.find(item => item.path === pathname)?.text || 'Training App'}
           </Typography>
-          <Box sx={{ ml: 'auto' }}>
-            <GoogleAuth /> {/*Add GoogleAuth component here*/}
-            {/* <MicrosoftAuth /> */}
+          <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            {user && (
+              <>
+                <Typography variant="body2">
+                  Hi {user.name || user.email} ({user.role})
+                </Typography>
+                <Button color="inherit" size="small" startIcon={<LogoutIcon />} onClick={logout}>
+                  Logout
+                </Button>
+              </>
+            )}
           </Box>
         </Toolbar>
       </AppBar>
