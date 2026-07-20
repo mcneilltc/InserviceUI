@@ -48,7 +48,7 @@ ChartJS.register(ArcElement, ChartTooltip, Legend);
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
 
-const ALL_SITES = ['MCAC', 'Cordelia', 'Double Oaks', 'Ramsey Creek Beach'];
+const ALL_SITES = ['MCAC', 'Ramsey Creek Beach', 'Double Oaks', 'Cordelia', 'ERRC', 'NRRC', 'Rays Splash Planet','Marion Diehl'];
 
 const ManagerDashboard = () => {
   const { user } = useAuth();

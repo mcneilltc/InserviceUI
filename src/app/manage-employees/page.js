@@ -43,7 +43,7 @@ import moment from 'moment';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ImportEmployeesDialog from './ImportEmployeesDialog';
 
-const LOCATIONS = ['MCAC', 'Ramsey Creek Beach', 'Double Oaks', 'Cordelia'];
+const LOCATIONS = ['MCAC', 'Ramsey Creek Beach', 'Double Oaks', 'Cordelia', 'ERRC', 'NRRC', 'Rays Splash Planet','Marion Diehl'];
 
 const ManageEmployees = () => {
   const queryClient = useQueryClient();

@@ -23,7 +23,7 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost
 
 const EmployeeHoursTracker = ({ allowedLocations } = {}) => {
   const [employees, setEmployees] = useState([]);
-  const [locations] = useState(allowedLocations && allowedLocations.length ? allowedLocations : ['MCAC', 'Cordelia', 'Double Oaks', 'Ramsey Creek Beach']);
+  const [locations] = useState(allowedLocations && allowedLocations.length ? allowedLocations : ['MCAC', 'Ramsey Creek Beach', 'Double Oaks', 'Cordelia', 'ERRC', 'NRRC', 'Rays Splash Planet','Marion Diehl']);
   const [selectedLocation, setSelectedLocation] = useState('all');
   const [loading, setLoading] = useState(false);
 

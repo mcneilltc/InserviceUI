@@ -120,7 +120,7 @@ const EmployeeHours = () => {
         const duration = end.diff(start, 'hours', true);
         return [
           session.date,
-          `"${session.topic}"`,
+          `"${(session.topics || (session.topic ? [session.topic] : [])).join('; ')}"`,
           session.startTime,
           session.endTime,
           duration,
@@ -145,7 +145,7 @@ const EmployeeHours = () => {
   // Convert training sessions to calendar events
   const events = filteredSessions.map((session) => ({
     id: session.id,
-    title: session.topic,
+    title: (session.topics || (session.topic ? [session.topic] : [])).join(', '),
     start: new Date(`${session.date}T${session.startTime}`),
     end: new Date(`${session.date}T${session.endTime}`),
     resource: session,
@@ -318,7 +318,7 @@ const EmployeeHours = () => {
             <DialogContent>
               <Box sx={{ mt: 2 }}>
                 <Typography variant="subtitle1" gutterBottom>
-                  <strong>Topic:</strong> {selectedSession.topic}
+                  <strong>Topics:</strong> {(selectedSession.topics || (selectedSession.topic ? [selectedSession.topic] : [])).join(', ')}
                 </Typography>
                 <Typography variant="subtitle1" gutterBottom>
                   <strong>Date:</strong> {moment(selectedSession.date).format('MMMM D, YYYY')}

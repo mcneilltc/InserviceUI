@@ -78,6 +78,10 @@ const AddTraining = () => {
     "Cordelia",
     "Double Oaks",
     "Ramsey Creek Beach",
+    "ERRC",
+    "NRRC",
+    "Rays Splash Planet",
+    "Marion Diehl"
   ]);
 
   // Modal state

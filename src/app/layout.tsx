@@ -27,7 +27,7 @@ export default function RootLayout({ children }) {
   const [queryClient] = useState(() => new QueryClient());
   const pathname = usePathname();
   const isEmployeePortal = pathname?.startsWith('/employee');
-  const isPublicPath = PUBLIC_EXACT.includes(pathname) || PUBLIC_PREFIXES.some((p) => pathname?.startsWith(p));
+  const isPublicPath = PUBLIC_EXACT.includes(pathname || '') || PUBLIC_PREFIXES.some((p) => pathname?.startsWith(p));
 
   return (
     <html lang="en">

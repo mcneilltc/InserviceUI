@@ -183,7 +183,7 @@ export default function ImportEmployeesDialog({ open, onClose, onImportComplete 
               location: payload.locations[0] || 'Unknown',
               startTime: '09:00',
               length: hrs,
-              topic: 'Inservice Training',
+              topics: ['Inservice Training'],
               trainer: 'Imported',
               status: 'completed',
             }).catch(() => {}); // best-effort

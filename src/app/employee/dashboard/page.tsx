@@ -26,7 +26,7 @@ ChartJS.register(ArcElement, Tooltip, Legend);
 interface Session {
   id: string;
   date: string;
-  topic: string;
+  topics: string[];
   hours: number;
   location: string;
   trainer: string;
@@ -269,7 +269,7 @@ export default function EmployeeDashboard() {
                       <ListItemText
                         primary={
                           <Typography variant="body1" fontWeight={500}>
-                            {s.topic}
+                            {(s.topics || []).join(', ')}
                           </Typography>
                         }
                         secondary={`${moment(s.date).format('MMM D, YYYY')} · ${s.location} · Trainer: ${s.trainer}`}

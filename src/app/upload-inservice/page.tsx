@@ -6,7 +6,7 @@ import {
   Box, Button, Container, Paper, Typography, Grid, TextField,
   CircularProgress, Alert, Divider, Chip, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, IconButton,
-  Select, MenuItem, FormControl, InputLabel, Snackbar,
+  Select, MenuItem, FormControl, InputLabel, Snackbar, Checkbox,
   Card, CardContent, CardMedia, Stack, Tooltip, LinearProgress,
 } from '@mui/material';
 import {
@@ -33,9 +33,15 @@ interface EmployeeRow {
   confirmed: boolean; // user confirmed which employee this maps to
 }
 
+interface TopicRow {
+  extractedName: string;
+  matchedId: string | null;
+  matchedName: string | null;
+}
+
 interface FormState {
-  trainer: string;       // trainer ID
-  topic: string;         // topic ID
+  trainers: string[];    // trainer IDs
+  topics: TopicRow[];
   date: string;
   startTime: string;
   endTime: string;
@@ -59,9 +65,9 @@ function computeDurationHours(startTime: string, endTime: string): string {
 export default function UploadInservicePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Upload / extract state
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  // Upload / extract state — multiple pages: sign-in sheet page(s) + a topics-checklist page
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -70,9 +76,9 @@ export default function UploadInservicePage() {
 
   // Lookups returned by the backend alongside extraction
   const [lookups, setLookups] = useState<{
-    trainers: { id: string; name: string }[];
+    trainers: { id: string; name: string; email: string }[];
     topics: { id: string; name: string }[];
-    employees: { id: string; name: string; email: string }[];
+    employees: { id: string; name: string; email: string; isSupervisor: boolean }[];
   } | null>(null);
 
   // The editable review form
@@ -81,34 +87,40 @@ export default function UploadInservicePage() {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
   // ---------------------------------------------------------------------------
-  // File selection
+  // File selection — pages accumulate (sign-in page(s) + topics-checklist page)
   // ---------------------------------------------------------------------------
-  const handleFileSelect = useCallback((file: File) => {
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
+  const handleFilesSelect = useCallback((files: File[]) => {
+    if (files.length === 0) return;
+    setImageFiles(prev => [...prev, ...files]);
+    setImagePreviews(prev => [...prev, ...files.map(f => URL.createObjectURL(f))]);
     setForm(null);
     setExtractError(null);
     setSaved(false);
     setSaveErrors([]);
   }, []);
 
+  const removePage = (index: number) => {
+    setImageFiles(prev => prev.filter((_, i) => i !== index));
+    setImagePreviews(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith('image/')) handleFileSelect(file);
-  }, [handleFileSelect]);
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+    if (files.length > 0) handleFilesSelect(files);
+  }, [handleFilesSelect]);
 
   // ---------------------------------------------------------------------------
   // OCR extraction
   // ---------------------------------------------------------------------------
   const handleExtract = async () => {
-    if (!imageFile) return;
+    if (imageFiles.length === 0) return;
     setExtracting(true);
     setExtractError(null);
 
     try {
       const formData = new FormData();
-      formData.append('sheet', imageFile);
+      imageFiles.forEach(file => formData.append('sheets', file));
       const { data } = await axios.post(`${BACKEND_URL}/api/ocr/extract`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
@@ -118,8 +130,12 @@ export default function UploadInservicePage() {
       const { extracted, matched } = data;
 
       setForm({
-        trainer: matched.trainer.matchedId || '',
-        topic: matched.topic.matchedId || '',
+        trainers: matched.trainer.matchedId ? [matched.trainer.matchedId] : [],
+        topics: (matched.topics || []).map((t: any) => ({
+          extractedName: t.extractedName,
+          matchedId: t.matchedId || '',
+          matchedName: t.matchedName || '',
+        })),
         date: extracted.date || '',
         startTime: extracted.startTime || '',
         endTime: extracted.endTime || '',
@@ -141,7 +157,7 @@ export default function UploadInservicePage() {
   };
 
   // ---------------------------------------------------------------------------
-  // Form helpers
+  // Form helpers — employees
   // ---------------------------------------------------------------------------
   const updateEmployee = (index: number, field: keyof EmployeeRow, value: any) => {
     setForm(prev => {
@@ -170,6 +186,33 @@ export default function UploadInservicePage() {
   };
 
   // ---------------------------------------------------------------------------
+  // Form helpers — topics
+  // ---------------------------------------------------------------------------
+  const updateTopic = (index: number, field: keyof TopicRow, value: any) => {
+    setForm(prev => {
+      if (!prev) return prev;
+      const topicsArr = [...prev.topics];
+      topicsArr[index] = { ...topicsArr[index], [field]: value };
+      if (field === 'matchedId' && lookups) {
+        const found = lookups.topics.find(t => t.id === value);
+        topicsArr[index].matchedName = found?.name || '';
+      }
+      return { ...prev, topics: topicsArr };
+    });
+  };
+
+  const addTopic = () => {
+    setForm(prev => prev ? {
+      ...prev,
+      topics: [...prev.topics, { extractedName: '', matchedId: '', matchedName: '' }]
+    } : prev);
+  };
+
+  const removeTopic = (index: number) => {
+    setForm(prev => prev ? { ...prev, topics: prev.topics.filter((_, i) => i !== index) } : prev);
+  };
+
+  // ---------------------------------------------------------------------------
   // Save — creates one training session per confirmed employee
   // ---------------------------------------------------------------------------
   const handleSave = async () => {
@@ -186,6 +229,46 @@ export default function UploadInservicePage() {
       return;
     }
 
+    if (form.trainers.length === 0) {
+      setSnackbar({ open: true, message: 'Please select at least one trainer before saving', severity: 'error' });
+      setSaving(false);
+      return;
+    }
+
+    const resolvedTopics = form.topics
+      .map(t => t.matchedName || t.extractedName)
+      .filter(Boolean);
+    if (resolvedTopics.length === 0) {
+      setSnackbar({ open: true, message: 'Please confirm at least one topic before saving', severity: 'error' });
+      setSaving(false);
+      return;
+    }
+
+    // 1-trainer-to-12-employee ratio, waived if any selected trainer is also a
+    // supervisor (matched by email against employee records).
+    const isExemptFromRatio = form.trainers.some(trainerId => {
+      const trainerEmail = lookups?.trainers.find(t => t.id === trainerId)?.email;
+      if (!trainerEmail) return false;
+      return lookups?.employees.some(e => e.email === trainerEmail && e.isSupervisor);
+    });
+
+    if (!isExemptFromRatio) {
+      const maxTrainees = form.trainers.length * 12;
+      if (confirmedEmployees.length > maxTrainees) {
+        setSnackbar({
+          open: true,
+          message: `Training ratio exceeded! Maximum ${maxTrainees} trainees allowed for ${form.trainers.length} trainer(s) (1:12 ratio). Add a supervisor as a trainer to exceed this, or select more trainers.`,
+          severity: 'error',
+        });
+        setSaving(false);
+        return;
+      }
+    }
+
+    const trainerNames = form.trainers
+      .map(id => lookups?.trainers.find(t => t.id === id)?.name || id)
+      .join(', ');
+
     for (const emp of confirmedEmployees) {
       try {
         await axios.post(`${BACKEND_URL}/api/training-sessions/employee/${emp.matchedId}`, {
@@ -193,8 +276,8 @@ export default function UploadInservicePage() {
           location: form.location,
           startTime: form.startTime || null,
           length: parseFloat(form.length) || 1,
-          topic: lookups?.topics.find(t => t.id === form.topic)?.name || form.topic,
-          trainer: lookups?.trainers.find(t => t.id === form.trainer)?.name || form.trainer,
+          topics: resolvedTopics,
+          trainer: trainerNames,
           trainees: confirmedEmployees.map(e => e.matchedId),
           status: 'completed',
         });
@@ -222,8 +305,8 @@ export default function UploadInservicePage() {
         Upload Inservice Sheet
       </Typography>
       <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-        Take a photo of a physical sign-in sheet. We&apos;ll automatically extract the trainer, topic,
-        date, time, and attendee names — then let you review before saving.
+        Take photos of the sign-in sheet page(s) and the topics-checklist page. We&apos;ll automatically
+        extract the trainer, topics, date, time, and attendee names — then let you review before saving.
       </Typography>
 
       <Grid container spacing={3}>
@@ -231,7 +314,7 @@ export default function UploadInservicePage() {
         <Grid item xs={12} md={5}>
           <Paper sx={{ p: 3, height: '100%' }}>
             <Typography variant="h6" fontWeight={600} gutterBottom>
-              1. Upload Sheet Image
+              1. Upload Sheet Pages
             </Typography>
 
             {/* Drop zone */}
@@ -241,12 +324,12 @@ export default function UploadInservicePage() {
               onClick={() => fileInputRef.current?.click()}
               sx={{
                 border: '2px dashed',
-                borderColor: imageFile ? 'primary.main' : 'divider',
+                borderColor: imageFiles.length > 0 ? 'primary.main' : 'divider',
                 borderRadius: 2,
                 p: 4,
                 textAlign: 'center',
                 cursor: 'pointer',
-                bgcolor: imageFile ? 'primary.50' : 'background.default',
+                bgcolor: imageFiles.length > 0 ? 'primary.50' : 'background.default',
                 transition: 'all 0.2s',
                 '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
                 mb: 2,
@@ -254,30 +337,47 @@ export default function UploadInservicePage() {
             >
               <CloudUploadIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
               <Typography variant="body1" fontWeight={500}>
-                {imageFile ? imageFile.name : 'Drag & drop or click to upload'}
+                {imageFiles.length > 0 ? `${imageFiles.length} page(s) added — click to add more` : 'Drag & drop or click to upload'}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                JPEG, PNG, WEBP, HEIC — max 10MB
+                Sign-in sheet page(s) + topics checklist page — JPEG, PNG, WEBP, HEIC — max 10MB each
               </Typography>
               <input
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
+                multiple
                 hidden
-                onChange={e => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
+                onChange={e => e.target.files && handleFilesSelect(Array.from(e.target.files))}
               />
             </Box>
 
-            {/* Preview */}
-            {imagePreview && (
-              <Card sx={{ mb: 2 }}>
-                <CardMedia
-                  component="img"
-                  image={imagePreview}
-                  alt="Sheet preview"
-                  sx={{ maxHeight: 350, objectFit: 'contain', bgcolor: '#f5f5f5' }}
-                />
-              </Card>
+            {/* Previews */}
+            {imagePreviews.length > 0 && (
+              <Grid container spacing={1} sx={{ mb: 2 }}>
+                {imagePreviews.map((src, idx) => (
+                  <Grid item xs={6} key={idx}>
+                    <Card sx={{ position: 'relative' }}>
+                      <CardMedia
+                        component="img"
+                        image={src}
+                        alt={`Sheet page ${idx + 1}`}
+                        sx={{ height: 140, objectFit: 'contain', bgcolor: '#f5f5f5' }}
+                      />
+                      <IconButton
+                        size="small"
+                        onClick={() => removePage(idx)}
+                        sx={{ position: 'absolute', top: 2, right: 2, bgcolor: 'background.paper' }}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                      <Typography variant="caption" sx={{ position: 'absolute', bottom: 2, left: 4, bgcolor: 'background.paper', px: 0.5, borderRadius: 0.5 }}>
+                        Page {idx + 1}
+                      </Typography>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
             )}
 
             <Button
@@ -286,10 +386,10 @@ export default function UploadInservicePage() {
               size="large"
               startIcon={extracting ? <CircularProgress size={18} color="inherit" /> : <AutoFixHighIcon />}
               onClick={handleExtract}
-              disabled={!imageFile || extracting}
+              disabled={imageFiles.length === 0 || extracting}
               sx={{ fontWeight: 700 }}
             >
-              {extracting ? 'Extracting data…' : 'Extract Data with AI'}
+              {extracting ? 'Extracting data…' : `Extract Data with AI${imageFiles.length > 0 ? ` (${imageFiles.length} page${imageFiles.length > 1 ? 's' : ''})` : ''}`}
             </Button>
 
             {extracting && <LinearProgress sx={{ mt: 1, borderRadius: 1 }} />}
@@ -313,7 +413,7 @@ export default function UploadInservicePage() {
               <Box sx={{ textAlign: 'center', py: 8, color: 'text.secondary' }}>
                 <AutoFixHighIcon sx={{ fontSize: 64, opacity: 0.3 }} />
                 <Typography variant="body1" sx={{ mt: 1 }}>
-                  Upload an image and click &quot;Extract Data&quot; to see results here
+                  Upload page(s) and click &quot;Extract Data&quot; to see results here
                 </Typography>
               </Box>
             )}
@@ -321,42 +421,31 @@ export default function UploadInservicePage() {
             {form && (
               <>
                 <Grid container spacing={2}>
-                  {/* Trainer */}
+                  {/* Trainers */}
                   <Grid item xs={12} sm={6}>
                     <FormControl fullWidth>
-                      <InputLabel>Trainer / Instructor</InputLabel>
+                      <InputLabel>Trainers</InputLabel>
                       <Select
-                        value={form.trainer}
-                        label="Trainer / Instructor"
-                        onChange={e => setForm(f => f ? { ...f, trainer: e.target.value } : f)}
+                        multiple
+                        value={form.trainers}
+                        label="Trainers"
+                        onChange={e => setForm(f => f ? { ...f, trainers: e.target.value as any } : f)}
+                        renderValue={(selected: any) =>
+                          selected.map((id: string) => lookups?.trainers.find(t => t.id === id)?.name || id).join(', ')
+                        }
                       >
-                        <MenuItem value=""><em>Not matched</em></MenuItem>
                         {lookups?.trainers.map(t => (
-                          <MenuItem key={t.id} value={t.id}>{t.name}</MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Grid>
-
-                  {/* Topic */}
-                  <Grid item xs={12} sm={6}>
-                    <FormControl fullWidth>
-                      <InputLabel>Training Topic</InputLabel>
-                      <Select
-                        value={form.topic}
-                        label="Training Topic"
-                        onChange={e => setForm(f => f ? { ...f, topic: e.target.value } : f)}
-                      >
-                        <MenuItem value=""><em>Not matched</em></MenuItem>
-                        {lookups?.topics.map(t => (
-                          <MenuItem key={t.id} value={t.id}>{t.name}</MenuItem>
+                          <MenuItem key={t.id} value={t.id}>
+                            <Checkbox checked={form.trainers.includes(t.id)} />
+                            {t.name}
+                          </MenuItem>
                         ))}
                       </Select>
                     </FormControl>
                   </Grid>
 
                   {/* Date */}
-                  <Grid item xs={12} sm={3}>
+                  <Grid item xs={12} sm={6}>
                     <TextField
                       fullWidth
                       label="Date"
@@ -368,7 +457,7 @@ export default function UploadInservicePage() {
                   </Grid>
 
                   {/* Start time */}
-                  <Grid item xs={12} sm={3}>
+                  <Grid item xs={12} sm={4}>
                     <TextField
                       fullWidth
                       label="Start Time"
@@ -380,7 +469,7 @@ export default function UploadInservicePage() {
                   </Grid>
 
                   {/* End time */}
-                  <Grid item xs={12} sm={3}>
+                  <Grid item xs={12} sm={4}>
                     <TextField
                       fullWidth
                       label="End Time"
@@ -392,7 +481,7 @@ export default function UploadInservicePage() {
                   </Grid>
 
                   {/* Duration (auto-computed from start/end, overridable) */}
-                  <Grid item xs={12} sm={3}>
+                  <Grid item xs={12} sm={4}>
                     <TextField
                       fullWidth
                       label="Duration (hours)"
@@ -416,6 +505,73 @@ export default function UploadInservicePage() {
                 </Grid>
 
                 <Divider sx={{ my: 3 }} />
+
+                {/* Topics table */}
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="subtitle1" fontWeight={600}>
+                    Topics ({form.topics.filter(t => t.matchedId).length} matched)
+                  </Typography>
+                  <Button size="small" startIcon={<AddIcon />} onClick={addTopic}>
+                    Add Row
+                  </Button>
+                </Box>
+
+                <TableContainer sx={{ mb: 3 }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Checked on Sheet</TableCell>
+                        <TableCell>Match to Topic</TableCell>
+                        <TableCell sx={{ width: 48 }} />
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {form.topics.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={3}>
+                            <Typography variant="body2" color="text.secondary">
+                              No topics detected — add one manually if the checklist page wasn&apos;t included.
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      {form.topics.map((topic, idx) => (
+                        <TableRow key={idx} sx={{ bgcolor: topic.matchedId ? 'success.50' : 'warning.50' }}>
+                          <TableCell>
+                            <TextField
+                              size="small"
+                              variant="standard"
+                              value={topic.extractedName}
+                              onChange={e => updateTopic(idx, 'extractedName', e.target.value)}
+                              placeholder="Topic from sheet"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <FormControl fullWidth size="small">
+                              <Select
+                                value={topic.matchedId || ''}
+                                displayEmpty
+                                onChange={e => updateTopic(idx, 'matchedId', e.target.value)}
+                              >
+                                <MenuItem value=""><em>Not matched</em></MenuItem>
+                                {lookups?.topics.map(t => (
+                                  <MenuItem key={t.id} value={t.id}>{t.name}</MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          </TableCell>
+                          <TableCell>
+                            <Tooltip title="Remove row">
+                              <IconButton size="small" onClick={() => removeTopic(idx)}>
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
 
                 {/* Employees table */}
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
@@ -478,7 +634,7 @@ export default function UploadInservicePage() {
                 <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap', gap: 0.5 }}>
                   <Chip
                     icon={<CheckCircleIcon />}
-                    label="Green = matched to DB employee"
+                    label="Green = matched to existing record"
                     size="small"
                     color="success"
                     variant="outlined"
@@ -490,6 +646,29 @@ export default function UploadInservicePage() {
                     variant="outlined"
                   />
                 </Stack>
+
+                {form.trainers.length > 0 && (() => {
+                  const isExempt = form.trainers.some(trainerId => {
+                    const trainerEmail = lookups?.trainers.find(t => t.id === trainerId)?.email;
+                    return trainerEmail && lookups?.employees.some(e => e.email === trainerEmail && e.isSupervisor);
+                  });
+                  const maxTrainees = form.trainers.length * 12;
+                  const confirmedCount = form.employees.filter(e => e.matchedId).length;
+                  return (
+                    <Box sx={{ mt: 2, p: 2, bgcolor: !isExempt && confirmedCount > maxTrainees ? 'error.light' : 'info.light', borderRadius: 1 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        {isExempt
+                          ? 'Ratio cap waived — a supervisor is among the selected trainers.'
+                          : `Matched Attendees: ${confirmedCount} | Max Allowed: ${maxTrainees} (${form.trainers.length} trainer(s) × 12)`}
+                        {!isExempt && confirmedCount > maxTrainees && (
+                          <Typography variant="body2" color="error" sx={{ mt: 1 }}>
+                            Training ratio exceeded! Select more trainers, or include a supervisor to waive the cap.
+                          </Typography>
+                        )}
+                      </Typography>
+                    </Box>
+                  );
+                })()}
 
                 {saveErrors.length > 0 && (
                   <Alert severity="error" sx={{ mt: 2 }}>

@@ -31,7 +31,7 @@ const CheckIn = () => {
       axios
         .get(`${BACKEND_URL}/api/sessions/${sessionId}`)
         .then((response) => {
-          setSessionName(response.data.name || response.data.topic || 'Training Session');
+          setSessionName(response.data.name || (response.data.topics && response.data.topics.join(', ')) || response.data.topic || 'Training Session');
         })
         .catch((error) => {
           console.error("Error fetching session details:", error);
