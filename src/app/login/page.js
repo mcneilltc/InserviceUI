@@ -25,47 +25,32 @@ const LoginPage = () => {
     }
   }, [user, router]);
 
-  const checkWhitelistAndLogin = useCallback(async (userData) => {
+  // GoogleAuth already calls POST /api/auth/google itself and hands back the
+  // fully resolved, server-verified user — login() picks the right redirect
+  // based on its role.
+  const handleGoogleLogin = useCallback((userData) => {
+    login(userData);
+  }, [login]);
+
+  // The Microsoft callback route hands us a raw access token via the redirect
+  // URL (not a resolved identity) — verify it server-side here, same as Google.
+  const handleMicrosoftToken = useCallback(async (accessToken) => {
     try {
-      const response = await axios.post(`${BACKEND_URL}/api/admin/check-whitelist`, {
-        email: userData.email
-      });
-
-      const { isWhitelisted, role, name, supervisorScope, supervisorLocations, employeeId, trainerId } = response.data;
-
-      if (isWhitelisted) {
-        const fullUser = {
-          ...userData,
-          name: name || userData.name,
-          role,
-          supervisorScope: supervisorScope || null,
-          supervisorLocations: supervisorLocations || [],
-          employeeId: employeeId || null,
-          trainerId: trainerId || null,
-        };
-        login(fullUser, role === 'trainer' ? '/add-training' : '/manager-dashboard');
-      } else {
-        setWhitelistError('Your email is not authorized to access this application. Please contact an administrator.');
-      }
+      const response = await axios.post(`${BACKEND_URL}/api/auth/microsoft`, { accessToken });
+      login(response.data.user);
     } catch (error) {
-      console.error('Error checking whitelist:', error);
-      setWhitelistError('Failed to verify access. Please try again.');
+      console.error('Microsoft login failed:', error);
+      const message = error.response?.data?.message || 'Failed to verify Microsoft login. Please try again.';
+      setWhitelistError(message);
     }
   }, [login]);
 
   useEffect(() => {
-    // Handle Microsoft callback
-    const microsoftUser = searchParams?.get('microsoft_user');
-    if (microsoftUser) {
-      try {
-        const userData = JSON.parse(decodeURIComponent(microsoftUser));
-        checkWhitelistAndLogin(userData);
-      } catch (error) {
-        console.error('Error parsing Microsoft user data:', error);
-        setWhitelistError('Failed to process login');
-      }
+    const microsoftToken = searchParams?.get('microsoft_token');
+    if (microsoftToken) {
+      handleMicrosoftToken(microsoftToken);
     }
-  }, [searchParams, checkWhitelistAndLogin]);
+  }, [searchParams, handleMicrosoftToken]);
 
   if (loading) {
     return <div>Loading...</div>;
@@ -82,9 +67,9 @@ const LoginPage = () => {
         </Alert>
       )}
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 300 }}>
-        <MicrosoftAuth onLogin={checkWhitelistAndLogin} />
+        <MicrosoftAuth />
         <Divider>OR</Divider>
-        <GoogleAuth onLogin={checkWhitelistAndLogin} />
+        <GoogleAuth onLogin={handleGoogleLogin} />
       </Box>
     </Box>
   );

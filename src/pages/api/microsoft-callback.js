@@ -44,22 +44,11 @@ export default async function handler(req, res) {
 
     const { access_token } = tokenResponse.data;
 
-    // Get user info from Microsoft Graph API
-    const userResponse = await axios.get('https://graph.microsoft.com/v1.0/me', {
-      headers: {
-        Authorization: `Bearer ${access_token}`,
-      },
-    });
+    // Pass the raw access token through — the backend verifies it server-side
+    // (POST /api/auth/microsoft) and resolves identity from the verified
+    // response itself, not from anything carried in this redirect URL.
+    const redirectUrl = `/login?microsoft_token=${encodeURIComponent(access_token)}`;
 
-    const userData = {
-      name: userResponse.data.displayName || userResponse.data.userPrincipalName,
-      email: userResponse.data.mail || userResponse.data.userPrincipalName,
-      provider: 'microsoft',
-    };
-
-    // Redirect to login page with user data
-    const redirectUrl = `/login?microsoft_user=${encodeURIComponent(JSON.stringify(userData))}`;
-    
     return res.redirect(redirectUrl);
   } catch (error) {
     console.error('Microsoft OAuth error:', error);

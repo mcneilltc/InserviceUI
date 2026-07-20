@@ -27,20 +27,21 @@ function homeFor(role) {
 }
 
 const ProtectedRoute = ({ pathname, children }) => {
-  const { user } = useAuth();
+  const { user, authLoading } = useAuth();
   const router = useRouter();
   const requiredRoles = getRequiredRoles(pathname);
   const isAuthorized = !!user && requiredRoles.includes(user.role);
 
   useEffect(() => {
+    if (authLoading) return; // wait for GET /api/auth/session to resolve first
     if (!user) {
       router.push('/login');
     } else if (!requiredRoles.includes(user.role)) {
       router.push(homeFor(user.role));
     }
-  }, [user, pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, authLoading, pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!isAuthorized) {
+  if (authLoading || !isAuthorized) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
         <CircularProgress />

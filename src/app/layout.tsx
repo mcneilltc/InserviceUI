@@ -1,5 +1,6 @@
 "use client";
 
+import "../lib/axiosConfig";
 import "./globals.css";
 import { ThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";

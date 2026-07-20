@@ -1,26 +1,47 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import axios from 'axios';
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const router = useRouter();
   const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [lastActivity, setLastActivity] = useState(Date.now());
 
-  // Load user from localStorage/sessionStorage on mount
+  // Paint-cache: show the last-known user immediately (avoids a flash of
+  // logged-out UI), then reconcile with the server below — this is a UX nicety,
+  // never the source of truth for what the user can actually do.
   useEffect(() => {
-    const storedUser = JSON.parse(localStorage.getItem('user'));
-    if (storedUser) setUser(storedUser);
+    try {
+      const storedUser = JSON.parse(localStorage.getItem('user'));
+      if (storedUser) setUser(storedUser);
+    } catch {
+      // ignore malformed cache
+    }
   }, []);
 
-  // Persist user to localStorage
+  // The real source of truth: ask the backend to validate the session cookie.
   useEffect(() => {
-    if (user) localStorage.setItem('user', JSON.stringify(user));
-    else localStorage.removeItem('user');
-  }, [user]);
+    const hydrate = async () => {
+      try {
+        const { data } = await axios.get(`${BACKEND_URL}/api/auth/session`);
+        setUser(data.user);
+        localStorage.setItem('user', JSON.stringify(data.user));
+      } catch {
+        setUser(null);
+        localStorage.removeItem('user');
+      } finally {
+        setAuthLoading(false);
+      }
+    };
+    hydrate();
+  }, []);
 
-  // Inactivity timeout logic
+  // Inactivity timeout logic (client-side UX only — the session itself also
+  // expires server-side regardless of this).
   useEffect(() => {
     if (!user) return;
     const timeout = setTimeout(() => {
@@ -39,22 +60,32 @@ export const AuthProvider = ({ children }) => {
     };
   }, [user, lastActivity, router]);
 
-  // Call this on successful login. redirectTo defaults based on role if not provided.
+  // Call this after a successful /api/auth/google or /api/auth/microsoft call
+  // — the session cookie is already set by that response; this just records
+  // the user for display and navigates.
   const login = useCallback((userData, redirectTo) => {
     setUser(userData);
+    setAuthLoading(false);
     setLastActivity(Date.now());
+    localStorage.setItem('user', JSON.stringify(userData));
     const destination = redirectTo || (userData.role === 'trainer' ? '/add-training' : '/manager-dashboard');
     router.push(destination);
   }, [router]);
 
   // Call this on logout
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    try {
+      await axios.post(`${BACKEND_URL}/api/auth/logout`);
+    } catch {
+      // best-effort — clear local state regardless
+    }
     setUser(null);
+    localStorage.removeItem('user');
     router.push('/login');
   }, [router]);
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, authLoading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

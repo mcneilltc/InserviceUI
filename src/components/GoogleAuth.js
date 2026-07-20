@@ -1,11 +1,14 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Button } from '@mui/material';
+import { Button, Alert } from '@mui/material';
 import axios from 'axios';
 import { useAuth } from '../components/AuthContext';
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
+
 const GoogleAuth = ({ onLogin }) => {
+  const [authError, setAuthError] = useState('');
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -77,23 +80,21 @@ const GoogleAuth = ({ onLogin }) => {
       return;
     }
 
+    setAuthError('');
     const auth2 = window.gapi.auth2.getAuthInstance();
     try {
       const googleUser = await auth2.signIn();
-      const idToken = googleUser.getAuthResponse().id_token; // Get the ID token
-      const profile = googleUser.getBasicProfile();
+      const idToken = googleUser.getAuthResponse().id_token;
 
-      // Send the ID token to the backend for verification
-      const response = await axios.post('/api/google-signin', { idToken });
-      console.log('Backend response:', response.data);
+      // The backend verifies this token server-side and, only if the verified
+      // email is authorized, issues the real session cookie. Nothing here is
+      // trusted client-side — the resolved user/role comes back from that call.
+      const response = await axios.post(`${BACKEND_URL}/api/auth/google`, { idToken });
+      const userData = response.data.user;
 
-      const userData = {
-        name: profile.getName(),
-        email: profile.getEmail(),
-      };
       setUser(userData);
       setIsSignedIn(true);
-      
+
       if (onLogin) {
         onLogin(userData);
       } else {
@@ -101,6 +102,9 @@ const GoogleAuth = ({ onLogin }) => {
       }
     } catch (error) {
       console.error('Google Sign-In failed:', error);
+      const message = error.response?.data?.message || 'Google Sign-In failed. Please try again.';
+      setAuthError(message);
+      setIsSignedIn(false);
     }
   };
 
@@ -126,6 +130,7 @@ const GoogleAuth = ({ onLogin }) => {
 
   return (
     <div>
+      {authError && <Alert severity="error" sx={{ mb: 1 }}>{authError}</Alert>}
       {isSignedIn ? (
         <div>
           <p>Welcome, {user?.name}</p>
