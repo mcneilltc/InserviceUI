@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { Suspense, useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../../components/AuthContext';
 import GoogleAuth from '../../components/GoogleAuth';
 import MicrosoftAuth from '../../components/MicrosoftAuth';
@@ -75,4 +75,10 @@ const LoginPage = () => {
   );
 };
 
-export default LoginPage;
+export default function Page() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <LoginPage />
+    </Suspense>
+  );
+}

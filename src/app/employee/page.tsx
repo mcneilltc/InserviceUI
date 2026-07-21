@@ -81,7 +81,7 @@ export default function EmployeePortal() {
           color="white"
           sx={{ mb: 1, letterSpacing: 1 }}
         >
-          iTrain
+          UpSkilled
         </Typography>
         <Typography variant="subtitle1" color="rgba(255,255,255,0.75)" sx={{ mb: 5 }}>
           Inservice Training Portal
@@ -141,7 +141,7 @@ export default function EmployeePortal() {
                 Check Your Inservice
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                View your hours, compliance status, and this month's sessions
+                View your hours, compliance status, and this month&apos;s sessions
               </Typography>
               <Button
                 variant="contained"

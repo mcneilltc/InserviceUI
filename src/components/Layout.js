@@ -67,7 +67,7 @@ const Layout = ({ children }) => {
     <div>
       <Toolbar>
         <Typography variant="h6" noWrap component="div">
-          iTrain
+          upSkilled
         </Typography>
       </Toolbar>
       <Divider />

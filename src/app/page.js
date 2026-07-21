@@ -10,10 +10,10 @@ export default function Home() {
       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: '100vh', justifyContent: 'center', py: 6 }}>
         <Paper sx={{ p: 5, width: '100%', textAlign: 'center' }}>
           <Typography variant="h4" fontWeight={700} gutterBottom>
-            iTrain
+            upSkilled
           </Typography>
           <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-            Check your inservice training hours, or sign in if you're staff.
+            Check your inservice training hours, or sign in if you&apos;re staff.
           </Typography>
 
           <Stack spacing={2}>
