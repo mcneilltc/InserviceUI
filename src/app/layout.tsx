@@ -31,6 +31,9 @@ export default function RootLayout({ children }) {
 
   return (
     <html lang="en">
+      <head>
+        <title>UpSkilled</title>
+      </head>
       <body>
         <QueryClientProvider client={queryClient}>
         <AuthProvider>

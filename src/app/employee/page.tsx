@@ -71,18 +71,16 @@ export default function EmployeePortal() {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'linear-gradient(135deg, #1a237e 0%, #0d47a1 50%, #01579b 100%)',
+          background: 'linear-gradient(135deg, #06102C 0%, #0B1B45 55%, #06102C 100%)',
           p: 2,
         }}
       >
-        <Typography
-          variant="h4"
-          fontWeight="bold"
-          color="white"
-          sx={{ mb: 1, letterSpacing: 1 }}
-        >
-          UpSkilled
-        </Typography>
+        <Box
+          component="img"
+          src="/logo-full.png"
+          alt="UpSkilled"
+          sx={{ width: '100%', maxWidth: 220, borderRadius: 3, mb: 1 }}
+        />
         <Typography variant="subtitle1" color="rgba(255,255,255,0.75)" sx={{ mb: 5 }}>
           Inservice Training Portal
         </Typography>

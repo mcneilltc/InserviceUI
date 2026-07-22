@@ -1,14 +1,21 @@
 import { createTheme } from '@mui/material/styles';
 
+// UpSkilled brand palette, sampled from the logo (clock+arrow mark, navy background).
+export const BRAND_NAVY = '#06102C';
+export const BRAND_NAVY_SURFACE = '#101B3D'; // lightened navy for card/paper surfaces
+export const BRAND_BLUE = '#00C6FB';
+export const BRAND_GREEN = '#00EEC0';
+export const BRAND_GRADIENT = `linear-gradient(90deg, ${BRAND_BLUE}, ${BRAND_GREEN})`;
+
 const theme = createTheme({
   colorSchemes: {
     light: {
       palette: {
         primary: {
-          main: '#4F46E5', // Deep Indigo
+          main: '#0090C7', // Brand blue, deepened for contrast on white
         },
         secondary: {
-          main: '#0D9488', // Vibrant Teal
+          main: '#00B893', // Brand green, deepened for contrast on white
         },
         background: {
           default: '#F9FAFB', // Soft Gray
@@ -22,14 +29,14 @@ const theme = createTheme({
     dark: {
       palette: {
         primary: {
-          main: '#818CF8', // Soft Indigo
+          main: BRAND_BLUE,
         },
         secondary: {
-          main: '#2DD4BF', // Soft Teal
+          main: BRAND_GREEN,
         },
         background: {
-          default: '#0F172A', // Dark Slate
-          paper: '#1E293B', // Surface Slate
+          default: BRAND_NAVY,
+          paper: BRAND_NAVY_SURFACE,
         },
         text: {
           primary: '#F8FAFC', // Slate Ash

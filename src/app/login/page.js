@@ -59,8 +59,14 @@ const LoginPage = () => {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: 10, gap: 3 }}>
-      <Typography variant="h4" component="h1" gutterBottom>
-        Login
+      <Box
+        component="img"
+        src="/logo-full.png"
+        alt="UpSkilled"
+        sx={{ width: '100%', maxWidth: 200, borderRadius: 3, mb: 1 }}
+      />
+      <Typography variant="h6" component="h1" color="text.secondary" gutterBottom>
+        Sign in
       </Typography>
       {whitelistError && (
         <Alert severity="error" sx={{ minWidth: 300 }}>
