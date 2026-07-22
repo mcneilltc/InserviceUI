@@ -4,7 +4,7 @@ import React, { Suspense, useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../../components/AuthContext';
 import GoogleAuth from '../../components/GoogleAuth';
 import MicrosoftAuth from '../../components/MicrosoftAuth';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Box, Typography, Divider, Alert } from '@mui/material';
 import axios from 'axios';
 
@@ -14,12 +14,11 @@ const LoginPage = () => {
   const { user, login } = useAuth();
   const [whitelistError, setWhitelistError] = useState('');
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (user) {
-      router.push(user.role === 'trainer' ? '/add-training' : '/manager-dashboard');
+      router.push(user.role === 'trainer' ? '/trainer-dashboard' : '/manager-dashboard');
     } else {
       setLoading(false);
     }
@@ -32,8 +31,9 @@ const LoginPage = () => {
     login(userData);
   }, [login]);
 
-  // The Microsoft callback route hands us a raw access token via the redirect
-  // URL (not a resolved identity) — verify it server-side here, same as Google.
+  // The Microsoft callback route hands us a raw access token via sessionStorage
+  // (not a resolved identity, and not the URL) — verify it server-side here,
+  // same as Google.
   const handleMicrosoftToken = useCallback(async (accessToken) => {
     try {
       const response = await axios.post(`${BACKEND_URL}/api/auth/microsoft`, { accessToken });
@@ -46,11 +46,12 @@ const LoginPage = () => {
   }, [login]);
 
   useEffect(() => {
-    const microsoftToken = searchParams?.get('microsoft_token');
+    const microsoftToken = sessionStorage.getItem('microsoft_access_token');
     if (microsoftToken) {
+      sessionStorage.removeItem('microsoft_access_token');
       handleMicrosoftToken(microsoftToken);
     }
-  }, [searchParams, handleMicrosoftToken]);
+  }, [handleMicrosoftToken]);
 
   if (loading) {
     return <div>Loading...</div>;

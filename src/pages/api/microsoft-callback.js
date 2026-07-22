@@ -44,12 +44,33 @@ export default async function handler(req, res) {
 
     const { access_token } = tokenResponse.data;
 
-    // Pass the raw access token through — the backend verifies it server-side
-    // (POST /api/auth/microsoft) and resolves identity from the verified
-    // response itself, not from anything carried in this redirect URL.
-    const redirectUrl = `/login?microsoft_token=${encodeURIComponent(access_token)}`;
-
-    return res.redirect(redirectUrl);
+    // Hand the token to the browser via sessionStorage instead of a URL query
+    // param — a bearer token in the URL would end up in browser history and
+    // server access logs. The inline script also re-checks `state` against
+    // what MicrosoftAuth.js stashed in sessionStorage before redirecting to
+    // Microsoft: only a request originating from that same browser tab can
+    // have set it, so a forged/replayed callback URL won't have a match and
+    // the login is rejected instead of silently proceeding (CSRF protection).
+    res.setHeader('Content-Type', 'text/html');
+    return res.send(`
+      <html>
+        <body>
+          <script>
+            (function () {
+              var expectedState = sessionStorage.getItem('ms_oauth_state');
+              sessionStorage.removeItem('ms_oauth_state');
+              if (!expectedState || expectedState !== ${JSON.stringify(state || '')}) {
+                document.body.innerHTML = '<h1>Authentication Error</h1><p>Invalid or expired sign-in attempt. Please try again.</p>';
+                setTimeout(function () { window.location.href = '/login'; }, 3000);
+                return;
+              }
+              sessionStorage.setItem('microsoft_access_token', ${JSON.stringify(access_token)});
+              window.location.replace('/login');
+            })();
+          </script>
+        </body>
+      </html>
+    `);
   } catch (error) {
     console.error('Microsoft OAuth error:', error);
     return res.status(500).send(`

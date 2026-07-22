@@ -57,17 +57,21 @@ import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import axios from "axios";
 import moment from "moment";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "../../components/AuthContext";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
 import { QRCodeCanvas } from "qrcode.react";
 const AddTraining = () => {
+  const { user } = useAuth();
+  const isSupervisor = user?.role === 'supervisor';
+
   // Form state
   const [formData, setFormData] = useState({
     date: null,
     location: "",
     startTime: "",
     length: "",
-    topic: "",
+    topics: [] as string[],
     trainer: [],
     status: "scheduled", // scheduled, in-progress, completed
   });
@@ -210,7 +214,7 @@ const AddTraining = () => {
         location: "",
         startTime: "",
         length: "",
-        topic: "",
+        topics: [],
         trainer: [],
         status: "scheduled",
       });
@@ -240,6 +244,10 @@ const AddTraining = () => {
         setSnackbar({ open: true, message: "Please select a location", severity: "error" });
         return;
     }
+    if (!formData.topics || formData.topics.length === 0) {
+        setSnackbar({ open: true, message: "Please select at least one topic", severity: "error" });
+        return;
+    }
     if (!formData.length) {
         setSnackbar({ open: true, message: "Please enter session length", severity: "error" });
         return;
@@ -249,7 +257,7 @@ const AddTraining = () => {
       location: formData.location,
       startTime: formData.startTime || undefined,
       length: parseInt(formData.length),
-      topic: formData.topic,
+      topics: formData.topics,
       trainer: formData.trainer,
       trainees: []
     };
@@ -417,7 +425,7 @@ const AddTraining = () => {
     try {
       // In development, you can optionally mock appending
       queryClient.invalidateQueries({ queryKey: ['topics'] });
-      setFormData((prev) => ({ ...prev, topic: newTopic }));
+      setFormData((prev) => ({ ...prev, topics: [...prev.topics, newTopic] }));
       setOpenNewTopicModal(false);
       setNewTopic("");
 
@@ -481,6 +489,16 @@ const AddTraining = () => {
     }
   };
 
+  const getSessionTrainerNames = (session: any): string[] => {
+    if (Array.isArray(session.trainer)) {
+      return session.trainer.map((trainerId: string) => {
+        const trainer = trainers.find((t: any) => t.id === trainerId);
+        return trainer ? trainer.name : trainerId;
+      });
+    }
+    return session.trainer ? [session.trainer] : [];
+  };
+
   const filteredSessions = trainingSessions.filter((session) => {
     // Apply status filter
     if (statusFilter !== "all" && session.status !== statusFilter) {
@@ -497,7 +515,8 @@ const AddTraining = () => {
     }
 
     // Apply trainer filter
-    if (trainerFilter !== "all" && session.trainer !== trainerFilter) {
+    const sessionTrainerNames = getSessionTrainerNames(session);
+    if (trainerFilter !== "all" && !sessionTrainerNames.includes(trainerFilter)) {
       return false;
     }
 
@@ -507,7 +526,8 @@ const AddTraining = () => {
     }
 
     // Apply topic filter
-    if (topicFilter !== "all" && session.topic !== topicFilter) {
+    const sessionTopics: string[] = session.topics || (session.topic ? [session.topic] : []);
+    if (topicFilter !== "all" && !sessionTopics.includes(topicFilter)) {
       return false;
     }
 
@@ -515,8 +535,8 @@ const AddTraining = () => {
     if (searchQuery) {
       const searchLower = searchQuery.toLowerCase();
       return (
-        session.topic.toLowerCase().includes(searchLower) ||
-        session.trainer.toLowerCase().includes(searchLower) ||
+        sessionTopics.some((t) => t.toLowerCase().includes(searchLower)) ||
+        sessionTrainerNames.some((t) => t.toLowerCase().includes(searchLower)) ||
         session.location.toLowerCase().includes(searchLower)
       );
     }
@@ -561,10 +581,12 @@ const AddTraining = () => {
         // Format date as MM-DD-YYYY
         const formattedDate = moment(session.date).format("MM-DD-YYYY");
 
+        const sessionTopics = session.topics || (session.topic ? [session.topic] : []);
+
         return [
           formattedDate,
-          session.topic,
-          session.trainer,
+          `"${sessionTopics.join("; ")}"`,
+          `"${getSessionTrainerNames(session).join("; ")}"`,
           session.location,
           session.status,
           session.trainees?.length || 0,
@@ -659,21 +681,30 @@ const AddTraining = () => {
               />
             </Grid>
 
-            {/* Topic */}
+            {/* Topics */}
             <Grid item xs={12} md={6} sx={{ minWidth: '250px' }}>
               <FormControl fullWidth required>
-                <InputLabel>Training Topic</InputLabel>
+                <InputLabel>Training Topics</InputLabel>
                 <Select
-                  value={formData.topic}
-                  label="Training Topic"
-                  onChange={handleChange("topic")}
+                  multiple
+                  value={formData.topics}
+                  label="Training Topics"
+                  onChange={(e) => {
+                    const value = e.target.value as string[];
+                    if (value.includes("new")) {
+                      setOpenNewTopicModal(true);
+                      return;
+                    }
+                    setFormData((prev) => ({ ...prev, topics: value }));
+                  }}
+                  renderValue={(selected) => (selected as string[]).join(", ")}
                 >
                   {topics.map((topic, index) => (
                     <MenuItem key={`topic-${index}-${topic}`} value={topic}>
                       {topic}
                     </MenuItem>
                   ))}
-                  <MenuItem value="new">+ Add New Topic</MenuItem>
+                  {isSupervisor && <MenuItem value="new">+ Add New Topic</MenuItem>}
                 </Select>
               </FormControl>
             </Grid>
@@ -880,7 +911,7 @@ const AddTraining = () => {
               return true;
             })
             .map((session, index) => (
-              <React.Fragment key={`session-${session.id || index}-${session.topic || 'unknown'}-${session.date || 'nodate'}-${index}`}>
+              <React.Fragment key={`session-${session.id || index}-${(session.topics || [session.topic]).join('-') || 'unknown'}-${session.date || 'nodate'}-${index}`}>
                 <ListItem>
                   <ListItemText
                     primary={
@@ -888,7 +919,7 @@ const AddTraining = () => {
                         sx={{ display: "flex", alignItems: "center", gap: 1 }}
                       >
                         <Typography variant="subtitle1" component="span">
-                          {session.topic}
+                          {(session.topics || (session.topic ? [session.topic] : [])).join(', ')}
                         </Typography>
                         <Chip
                           label={session.status}
@@ -905,12 +936,7 @@ const AddTraining = () => {
                           component="span"
                           sx={{ display: 'inline-block', mr: 1 }}
                         >
-                          {session.date} - {Array.isArray(session.trainer) 
-                            ? session.trainer.map(trainerId => {
-                                const trainer = trainers.find(t => t.id === trainerId);
-                                return trainer ? trainer.name : trainerId;
-                              }).join(', ')
-                            : session.trainer}
+                          {session.date} - {getSessionTrainerNames(session).join(', ')}
                         </Typography>
                         <Typography
                           variant="body2"

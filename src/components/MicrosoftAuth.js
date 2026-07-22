@@ -37,14 +37,21 @@ const MicrosoftAuth = ({ onLogin }) => {
       const redirectUri = `${window.location.origin}/api/microsoft-callback`;
       const scope = 'openid profile email';
       const responseType = 'code';
-      
+
+      // A fresh random state per attempt, stashed in sessionStorage, is what
+      // makes this a real CSRF check — the callback can only complete the
+      // login if it's running in a browser tab that set this same value
+      // right before redirecting to Microsoft.
+      const state = window.crypto.randomUUID();
+      sessionStorage.setItem('ms_oauth_state', state);
+
       const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?` +
         `client_id=${clientId}&` +
         `response_type=${responseType}&` +
         `redirect_uri=${encodeURIComponent(redirectUri)}&` +
         `response_mode=query&` +
         `scope=${encodeURIComponent(scope)}&` +
-        `state=12345`;
+        `state=${encodeURIComponent(state)}`;
 
       window.location.href = authUrl;
     } catch (error) {

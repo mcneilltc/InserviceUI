@@ -8,6 +8,7 @@ import { CircularProgress, Box } from '@mui/material';
 // Path prefix -> roles allowed to view it. First matching prefix wins.
 const ROUTE_PERMISSIONS = [
   { prefix: '/manager-dashboard', roles: ['supervisor'] },
+  { prefix: '/trainer-dashboard', roles: ['trainer'] },
   { prefix: '/manage-employees', roles: ['supervisor'] },
   { prefix: '/manage-trainers', roles: ['supervisor'] },
   { prefix: '/archived-trainers', roles: ['supervisor'] },
@@ -23,7 +24,7 @@ function getRequiredRoles(pathname) {
 }
 
 function homeFor(role) {
-  return role === 'trainer' ? '/add-training' : '/manager-dashboard';
+  return role === 'trainer' ? '/trainer-dashboard' : '/manager-dashboard';
 }
 
 const ProtectedRoute = ({ pathname, children }) => {

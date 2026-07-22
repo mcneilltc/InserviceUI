@@ -68,7 +68,7 @@ export const AuthProvider = ({ children }) => {
     setAuthLoading(false);
     setLastActivity(Date.now());
     localStorage.setItem('user', JSON.stringify(userData));
-    const destination = redirectTo || (userData.role === 'trainer' ? '/add-training' : '/manager-dashboard');
+    const destination = redirectTo || (userData.role === 'trainer' ? '/trainer-dashboard' : '/manager-dashboard');
     router.push(destination);
   }, [router]);
 

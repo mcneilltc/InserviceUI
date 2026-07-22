@@ -16,6 +16,11 @@ const GSI_SCRIPT_SRC = 'https://accounts.google.com/gsi/client';
 // was needed for this migration.
 const GoogleAuth = ({ onLogin }) => {
   const buttonContainerRef = useRef(null);
+  // Guards against React Strict Mode's dev-only double-invocation of effects —
+  // without this, initialize()/renderButton() would run twice on the same
+  // container, and Google's injected DOM would conflict with React's when it
+  // tries to reconcile, throwing "removeChild ... not a child of this node".
+  const initializedRef = useRef(false);
   const { login } = useAuth();
   const [authError, setAuthError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -44,11 +49,15 @@ const GoogleAuth = ({ onLogin }) => {
     };
 
     const initializeGis = () => {
+      if (initializedRef.current) return;
+
       if (!window.google?.accounts?.id) {
         console.error('Google Identity Services script not loaded correctly.');
         setLoading(false);
         return;
       }
+
+      initializedRef.current = true;
 
       window.google.accounts.id.initialize({
         client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
@@ -93,9 +102,12 @@ const GoogleAuth = ({ onLogin }) => {
   return (
     <div>
       {authError && <Alert severity="error" sx={{ mb: 1 }}>{authError}</Alert>}
-      <div ref={buttonContainerRef}>
-        {loading && <p>Loading Google Sign-In...</p>}
-      </div>
+      {/* This container is handed off to Google's script, which injects its
+          own DOM (an iframe) into it directly — it must never have React-
+          managed children, or React's reconciler and Google's DOM mutations
+          will conflict and throw on cleanup/re-render. */}
+      {loading && <p>Loading Google Sign-In...</p>}
+      <div ref={buttonContainerRef} />
     </div>
   );
 };

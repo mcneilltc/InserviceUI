@@ -37,6 +37,7 @@ const drawerWidth = 240;
 
 const ALL_MENU_ITEMS = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/manager-dashboard', roles: ['supervisor'] },
+  { text: 'Dashboard', icon: <DashboardIcon />, path: '/trainer-dashboard', roles: ['trainer'] },
   { text: 'Add Training', icon: <AddIcon />, path: '/add-training', roles: ['supervisor', 'trainer'] },
   { text: 'Upload Sheet', icon: <CloudUploadIcon />, path: '/upload-inservice', roles: ['supervisor', 'trainer'] },
   { text: 'Manage Employees', icon: <PeopleIcon />, path: '/manage-employees', roles: ['supervisor'] },
@@ -67,7 +68,7 @@ const Layout = ({ children }) => {
     <div>
       <Toolbar>
         <Typography variant="h6" noWrap component="div">
-          upSkilled
+          UpSkilled
         </Typography>
       </Toolbar>
       <Divider />

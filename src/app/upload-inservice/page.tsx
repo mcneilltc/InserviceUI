@@ -19,6 +19,7 @@ import {
   AutoFixHigh as AutoFixHighIcon,
 } from '@mui/icons-material';
 import axios from 'axios';
+import { useAuth } from '../../components/AuthContext';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
 
@@ -63,6 +64,8 @@ function computeDurationHours(startTime: string, endTime: string): string {
 
 // ---------------------------------------------------------------------------
 export default function UploadInservicePage() {
+  const { user } = useAuth();
+  const isSupervisor = user?.role === 'supervisor';
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Upload / extract state — multiple pages: sign-in sheet page(s) + a topics-checklist page
@@ -233,6 +236,22 @@ export default function UploadInservicePage() {
       setSnackbar({ open: true, message: 'Please select at least one trainer before saving', severity: 'error' });
       setSaving(false);
       return;
+    }
+
+    // Trainers can only use topics that already exist in the supervisor-managed
+    // topic list — matching an existing topic is fine, but an unmatched row
+    // would introduce a novel topic string, which only supervisors may do.
+    if (!isSupervisor) {
+      const unmatchedRow = form.topics.find(t => !t.matchedName);
+      if (unmatchedRow) {
+        setSnackbar({
+          open: true,
+          message: `Please match "${unmatchedRow.extractedName || 'this topic'}" to an existing topic, or remove it — only supervisors can add new topics.`,
+          severity: 'error',
+        });
+        setSaving(false);
+        return;
+      }
     }
 
     const resolvedTopics = form.topics
