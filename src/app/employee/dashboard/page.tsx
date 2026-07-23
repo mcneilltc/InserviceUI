@@ -12,7 +12,6 @@ import {
   Error as ErrorIcon,
   Event as EventIcon,
   Pool as PoolIcon,
-  Verified as VerifiedIcon,
   ArrowBack as ArrowBackIcon,
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
@@ -43,12 +42,18 @@ interface ComplianceInfo {
   thresholds: { midMonth: number; endOfMonth: number };
 }
 
+interface Certification {
+  type: string;
+  expirationDate: string;
+}
+
 interface Employee {
   id: string;
   firstName: string;
   lastName: string;
   badgeNumber: string;
   location: string;
+  certifications?: Certification[];
   depth?: string;
   certificationExpiration?: string;
   hasSlideCert?: boolean;
@@ -105,7 +110,7 @@ export default function EmployeeDashboard() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'linear-gradient(135deg, #1a237e 0%, #0d47a1 50%, #01579b 100%)',
+          background: 'linear-gradient(135deg, #06102C 0%, #0B1B45 55%, #06102C 100%)',
           p: 2,
         }}
       >
@@ -141,17 +146,11 @@ export default function EmployeeDashboard() {
     }],
   };
 
-  const certExpiry = employee.certificationExpiration
-    ? moment(employee.certificationExpiration)
-    : null;
-  const certExpired = certExpiry ? certExpiry.isBefore(moment()) : false;
-  const certSoonExpiring = certExpiry ? certExpiry.isBefore(moment().add(30, 'days')) : false;
-
   return (
     <Box
       sx={{
         minHeight: '100vh',
-        background: 'linear-gradient(135deg, #1a237e 0%, #0d47a1 50%, #01579b 100%)',
+        background: 'linear-gradient(135deg, #06102C 0%, #0B1B45 55%, #06102C 100%)',
         p: { xs: 2, sm: 3 },
       }}
     >
@@ -299,27 +298,27 @@ export default function EmployeeDashboard() {
             <Typography variant="h6" fontWeight="bold" sx={{ mb: 2 }}>
               Certifications
             </Typography>
+            {employee.certifications && employee.certifications.length > 0 && (
+              <Stack direction="row" flexWrap="wrap" gap={1.5} sx={{ mb: 2 }}>
+                {employee.certifications.map((cert, idx) => {
+                  const expiry = moment(cert.expirationDate);
+                  const expired = expiry.isBefore(moment());
+                  const soonExpiring = !expired && expiry.isBefore(moment().add(30, 'days'));
+                  return (
+                    <Chip
+                      key={idx}
+                      label={`${cert.type}: ${expired ? 'Expired' : 'Expires'} ${expiry.format('MM/DD/YYYY')}`}
+                      color={expired ? 'error' : soonExpiring ? 'warning' : 'success'}
+                    />
+                  );
+                })}
+              </Stack>
+            )}
             <Stack direction="row" flexWrap="wrap" gap={1.5}>
               {employee.depth && (
                 <Chip icon={<PoolIcon />} label={`Pool Depth: ${employee.depth}`} variant="outlined" />
               )}
-              {employee.hasSlideCert && (
-                <Chip icon={<VerifiedIcon />} label="Slide Certified" color="info" />
-              )}
-              {employee.hasSwimCert && (
-                <Chip icon={<VerifiedIcon />} label="Swim Certified" color="info" />
-              )}
-              {employee.isEliteSupervisor && (
-                <Chip icon={<VerifiedIcon />} label="Elite Supervisor" color="secondary" />
-              )}
-              {certExpiry && (
-                <Chip
-                  label={`Cert Expires: ${certExpiry.format('MM/DD/YYYY')}`}
-                  color={certExpired ? 'error' : certSoonExpiring ? 'warning' : 'default'}
-                  variant="outlined"
-                />
-              )}
-              {!employee.depth && !employee.hasSlideCert && !employee.hasSwimCert && !employee.isEliteSupervisor && !certExpiry && (
+              {!employee.depth && (!employee.certifications || employee.certifications.length === 0) && (
                 <Typography variant="body2" color="text.secondary">No certification data on file.</Typography>
               )}
             </Stack>

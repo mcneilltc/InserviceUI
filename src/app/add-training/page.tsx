@@ -58,6 +58,7 @@ import axios from "axios";
 import moment from "moment";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../components/AuthContext";
+import { SITES } from "../../constants/sites";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
 import { QRCodeCanvas } from "qrcode.react";
@@ -77,16 +78,7 @@ const AddTraining = () => {
   });
 
   // Data from API
-  const [locations, setLocations] = useState([
-    "MCAC",
-    "Cordelia",
-    "Double Oaks",
-    "Ramsey Creek Beach",
-    "ERRC",
-    "NRRC",
-    "Rays Splash Planet",
-    "Marion Diehl"
-  ]);
+  const [locations, setLocations] = useState(SITES);
 
   // Modal state
   const [openNewTopicModal, setOpenNewTopicModal] = useState(false);

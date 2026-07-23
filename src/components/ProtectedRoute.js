@@ -9,6 +9,7 @@ import { CircularProgress, Box } from '@mui/material';
 const ROUTE_PERMISSIONS = [
   { prefix: '/manager-dashboard', roles: ['supervisor'] },
   { prefix: '/trainer-dashboard', roles: ['trainer'] },
+  { prefix: '/certifications', roles: ['supervisor'] },
   { prefix: '/manage-employees', roles: ['supervisor'] },
   { prefix: '/manage-trainers', roles: ['supervisor'] },
   { prefix: '/archived-trainers', roles: ['supervisor'] },

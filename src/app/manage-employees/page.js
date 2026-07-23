@@ -35,15 +35,30 @@ import {
   Card,
   CardContent,
   Stack,
+  Autocomplete,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { Edit as EditIcon, Archive as ArchiveIcon, Add as AddIcon, LocationOn as LocationIcon } from '@mui/icons-material';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterMoment } from '@mui/x-date-pickers/AdapterMoment';
+import { Edit as EditIcon, Archive as ArchiveIcon, Add as AddIcon, LocationOn as LocationIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import axios from 'axios';
 import moment from 'moment';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ImportEmployeesDialog from './ImportEmployeesDialog';
+import { SITES as LOCATIONS } from '../../constants/sites';
 
-const LOCATIONS = ['MCAC', 'Ramsey Creek Beach', 'Double Oaks', 'Cordelia', 'ERRC', 'NRRC', 'Rays Splash Planet','Marion Diehl'];
+const CERTIFICATION_TYPE_SUGGESTIONS = [
+  'Lifeguarding',
+  'Lifeguard Instructor',
+  'CPR/AED for the Professional Rescuer',
+  'First Aid',
+  'Waterfront Lifeguarding',
+  'Waterpark Lifeguarding',
+  'Title 22',
+  'Elite Supervisor Training',
+  'Swim Instructor Training',
+  'Slide Certification',
+];
 
 const ManageEmployees = () => {
   const queryClient = useQueryClient();
@@ -56,6 +71,8 @@ const ManageEmployees = () => {
     position: '',
     hireDate: moment(),
     locations: [],
+    homeLocation: '',
+    certifications: [],
     badgeNumber: '',
     isSupervisor: false,
     supervisorScope: 'locations',
@@ -138,6 +155,8 @@ const ManageEmployees = () => {
         position: employee.position,
         hireDate: moment(employee.hireDate),
         locations: employee.locations || [],
+        homeLocation: employee.homeLocation || (employee.locations && employee.locations[0]) || '',
+        certifications: (employee.certifications || []).map((c) => ({ ...c, expirationDate: moment(c.expirationDate) })),
         badgeNumber: employee.badgeNumber || '',
         isSupervisor: employee.isSupervisor || false,
         supervisorScope: employee.supervisorScope || 'locations',
@@ -151,6 +170,8 @@ const ManageEmployees = () => {
         position: '',
         hireDate: moment(),
         locations: [],
+        homeLocation: '',
+        certifications: [],
         badgeNumber: '',
         isSupervisor: false,
         supervisorScope: 'locations',
@@ -169,10 +190,34 @@ const ManageEmployees = () => {
       position: '',
       hireDate: moment(),
       locations: [],
+      homeLocation: '',
+      certifications: [],
       badgeNumber: '',
       isSupervisor: false,
       supervisorScope: 'locations',
     });
+  };
+
+  const handleAddCertification = () => {
+    setFormData((prev) => ({
+      ...prev,
+      certifications: [...prev.certifications, { type: '', expirationDate: moment() }],
+    }));
+  };
+
+  const handleCertificationChange = (index, field, value) => {
+    setFormData((prev) => {
+      const certifications = [...prev.certifications];
+      certifications[index] = { ...certifications[index], [field]: value };
+      return { ...prev, certifications };
+    });
+  };
+
+  const handleRemoveCertification = (index) => {
+    setFormData((prev) => ({
+      ...prev,
+      certifications: prev.certifications.filter((_, i) => i !== index),
+    }));
   };
 
   const handleSubmit = () => {
@@ -182,6 +227,9 @@ const ManageEmployees = () => {
         .split(',')
         .map((e) => e.trim())
         .filter(Boolean),
+      certifications: formData.certifications
+        .filter((c) => c.type && c.expirationDate)
+        .map((c) => ({ type: c.type, expirationDate: moment(c.expirationDate).format('YYYY-MM-DD') })),
     };
     if (editingEmployee) {
       updateMutation.mutate({
@@ -374,6 +422,7 @@ const ManageEmployees = () => {
                 <TableCell>Email</TableCell>
                 <TableCell>Position</TableCell>
                 <TableCell>Badge #</TableCell>
+                <TableCell>Home Location</TableCell>
                 <TableCell>Locations</TableCell>
                 <TableCell>Role</TableCell>
                 <TableCell>Hire Date</TableCell>
@@ -393,6 +442,7 @@ const ManageEmployees = () => {
                   <TableCell>{employee.email}</TableCell>
                   <TableCell>{employee.position}</TableCell>
                   <TableCell>{employee.badgeNumber || '—'}</TableCell>
+                  <TableCell>{employee.homeLocation || '—'}</TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
                       {(employee.locations || []).map((location) => (
@@ -438,8 +488,9 @@ const ManageEmployees = () => {
             {editingEmployee ? 'Edit Employee' : 'Add New Employee'}
           </DialogTitle>
           <DialogContent>
+            <LocalizationProvider dateAdapter={AdapterMoment}>
             <Grid container spacing={2} sx={{ mt: 1 }}>
-              <Grid item xs={12}>
+              <Grid size={12}>
                 <TextField
                   fullWidth
                   label="Name"
@@ -448,7 +499,7 @@ const ManageEmployees = () => {
                   required
                 />
               </Grid>
-              <Grid item xs={12}>
+              <Grid size={12}>
                 <TextField
                   fullWidth
                   label="Email"
@@ -458,7 +509,7 @@ const ManageEmployees = () => {
                   required
                 />
               </Grid>
-              <Grid item xs={12}>
+              <Grid size={12}>
                 <TextField
                   fullWidth
                   label="Position"
@@ -467,7 +518,7 @@ const ManageEmployees = () => {
                   required
                 />
               </Grid>
-              <Grid item xs={12}>
+              <Grid size={12}>
                 <TextField
                   fullWidth
                   label="Badge Number"
@@ -476,7 +527,7 @@ const ManageEmployees = () => {
                   helperText="Used by employees to look themselves up on the self check-in page"
                 />
               </Grid>
-              <Grid item xs={12}>
+              <Grid size={12}>
                 <FormControl fullWidth required>
                   <InputLabel>Locations</InputLabel>
                   <Select
@@ -500,7 +551,57 @@ const ManageEmployees = () => {
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12}>
+              <Grid size={12}>
+                <FormControl fullWidth required>
+                  <InputLabel>Home Location</InputLabel>
+                  <Select
+                    value={formData.homeLocation}
+                    onChange={(e) => setFormData({ ...formData, homeLocation: e.target.value })}
+                    label="Home Location"
+                  >
+                    {LOCATIONS.map((location) => (
+                      <MenuItem key={location} value={location}>
+                        {location}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid size={12}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  Certifications
+                </Typography>
+                <Stack spacing={1.5}>
+                  {formData.certifications.map((cert, index) => (
+                    <Box key={index} sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                      <Autocomplete
+                        freeSolo
+                        fullWidth
+                        options={CERTIFICATION_TYPE_SUGGESTIONS}
+                        value={cert.type}
+                        onInputChange={(e, value) => handleCertificationChange(index, 'type', value)}
+                        renderInput={(params) => (
+                          <TextField {...params} label="Certification Type" size="small" />
+                        )}
+                        sx={{ flex: 2 }}
+                      />
+                      <DatePicker
+                        label="Expiration Date"
+                        value={cert.expirationDate}
+                        onChange={(newValue) => handleCertificationChange(index, 'expirationDate', newValue)}
+                        slotProps={{ textField: { size: 'small', sx: { flex: 1 } } }}
+                      />
+                      <IconButton onClick={() => handleRemoveCertification(index)} size="small">
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  ))}
+                  <Button startIcon={<AddIcon />} onClick={handleAddCertification} size="small" sx={{ alignSelf: 'flex-start' }}>
+                    Add Certification
+                  </Button>
+                </Stack>
+              </Grid>
+              <Grid size={12}>
                 <DatePicker
                   label="Hire Date"
                   value={formData.hireDate}
@@ -508,7 +609,7 @@ const ManageEmployees = () => {
                   slotProps={{ textField: { fullWidth: true, required: true } }}
                 />
               </Grid>
-              <Grid item xs={12}>
+              <Grid size={12}>
                 <FormControlLabel
                   control={
                     <Checkbox
@@ -520,7 +621,7 @@ const ManageEmployees = () => {
                 />
               </Grid>
               {formData.isSupervisor && (
-                <Grid item xs={12}>
+                <Grid size={12}>
                   <FormControl fullWidth>
                     <InputLabel>Supervisor Scope</InputLabel>
                     <Select
@@ -535,7 +636,7 @@ const ManageEmployees = () => {
                 </Grid>
               )}
               {formData.isSupervisor && (
-                <Grid item xs={12}>
+                <Grid size={12}>
                   <TextField
                     fullWidth
                     label="Alternate Login Emails"
@@ -546,6 +647,7 @@ const ManageEmployees = () => {
                 </Grid>
               )}
             </Grid>
+            </LocalizationProvider>
           </DialogContent>
           <DialogActions>
             <Button onClick={handleCloseDialog}>Cancel</Button>

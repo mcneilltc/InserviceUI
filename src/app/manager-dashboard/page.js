@@ -43,20 +43,16 @@ import { Chart as ChartJS, ArcElement, Tooltip as ChartTooltip, Legend } from 'c
 import { Doughnut } from 'react-chartjs-2';
 import EmployeeHoursTracker from '../../components/EmployeeHoursTracker';
 import { useAuth } from '../../components/AuthContext';
+import { SITES as ALL_SITES } from '../../constants/sites';
 
 ChartJS.register(ArcElement, ChartTooltip, Legend);
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
 
-const ALL_SITES = ['MCAC', 'Ramsey Creek Beach', 'Double Oaks', 'Cordelia', 'ERRC', 'NRRC', 'Rays Splash Planet','Marion Diehl'];
-
 const ManagerDashboard = () => {
   const { user } = useAuth();
   const isScopedSupervisor = user?.role === 'supervisor' && user?.supervisorScope === 'locations';
   const allowedSites = isScopedSupervisor && user.supervisorLocations?.length ? user.supervisorLocations : ALL_SITES;
-  // When a scoped supervisor picks "All Sites" it means all of *their* sites, not company-wide —
-  // the backend supports a comma-separated site list for this.
-  const scopedSitesParam = isScopedSupervisor ? allowedSites.join(',') : undefined;
 
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -67,17 +63,30 @@ const ManagerDashboard = () => {
   const [complianceData, setComplianceData] = useState(null);
   const [complianceLoading, setComplianceLoading] = useState(false);
 
-  // Filter states
-  const [workSite, setWorkSite] = useState('all');
+  // A single location filter whose MEANING depends on the supervisor's scope:
+  // - Scoped supervisor (e.g. ERRC only): their roster is always their own
+  //   home-based staff by default. This filter narrows by TRAINING location —
+  //   where those staff actually checked in/trained — so they can see when
+  //   their people trained at another site.
+  // - All-site supervisor: there's no fixed home roster, so this filter picks
+  //   which site's HOME roster to view instead.
+  const [locationFilter, setLocationFilter] = useState('all');
+  const locationFilterLabel = isScopedSupervisor ? 'Training Location' : 'Home Location';
+
   const [period, setPeriod] = useState('month');
   const [startDate, setStartDate] = useState(moment().startOf('month'));
   const [endDate, setEndDate] = useState(moment().endOf('month'));
   const [showEmployeesNeedingTraining, setShowEmployeesNeedingTraining] = useState(false);
-  const [employeeFilter, setEmployeeFilter] = useState('all');
-  const [checkInLocationFilter, setCheckInLocationFilter] = useState('all');
 
-  const workSites = ['all', ...allowedSites];
-  const inScope = (location) => !isScopedSupervisor || allowedSites.includes(location);
+  const workSites = ['all', ...ALL_SITES];
+  // Roster/home-location scoping — the security-relevant check, always
+  // enforced for a scoped supervisor regardless of what locationFilter means
+  // for them right now.
+  const inHomeScope = (location) => {
+    if (isScopedSupervisor) return allowedSites.includes(location);
+    if (locationFilter !== 'all') return location === locationFilter;
+    return true;
+  };
 
   useEffect(() => {
     fetchEmployees();
@@ -86,18 +95,17 @@ const ManagerDashboard = () => {
     fetchCompletedSessions();
     fetchComplianceStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workSite, period, startDate, endDate, checkInLocationFilter]);
+  }, [locationFilter, period, startDate, endDate]);
 
   const fetchCompletedSessions = async () => {
     try {
       const response = await axios.get(`${BACKEND_URL}/api/sessions`);
       let completed = response.data.filter(s => s.status === 'completed');
 
-      // Filter by workSite if specified, else restrict to the supervisor's scope
-      if (workSite !== 'all') {
-        completed = completed.filter(s => s.location === workSite);
+      if (locationFilter !== 'all') {
+        completed = completed.filter(s => s.location === locationFilter);
       } else if (isScopedSupervisor) {
-        completed = completed.filter(s => inScope(s.location));
+        completed = completed.filter(s => allowedSites.includes(s.location));
       }
 
       setCompletedSessions(completed);
@@ -124,7 +132,10 @@ const ManagerDashboard = () => {
         period: period !== 'custom' ? period : undefined,
         startDate: period === 'custom' ? startDate.toISOString() : undefined,
         endDate: period === 'custom' ? endDate.toISOString() : undefined,
-        workSite: workSite !== 'all' ? workSite : scopedSitesParam,
+        // Scoped supervisor: locationFilter narrows by training location.
+        // All-site supervisor: locationFilter narrows the roster by home site.
+        workSite: isScopedSupervisor && locationFilter !== 'all' ? locationFilter : undefined,
+        homeSite: !isScopedSupervisor && locationFilter !== 'all' ? locationFilter : undefined,
       };
 
       const response = await axios.get(`${BACKEND_URL}/api/dashboard/stats`, { params });
@@ -146,12 +157,13 @@ const ManagerDashboard = () => {
       const response = await axios.get(`${BACKEND_URL}/api/compliance/status`, { params });
       let data = response.data;
 
-      // This endpoint doesn't support site filtering server-side — scope it here for a
-      // location-limited supervisor.
-      if (isScopedSupervisor && data) {
-        const scopedEmployees = data.allEmployees.filter(e => inScope(e.location));
+      // This endpoint doesn't support site filtering server-side — scope it
+      // here by home location, for a location-limited supervisor or an
+      // all-site supervisor who's picked a home site to view.
+      if (data) {
+        const scopedEmployees = data.allEmployees.filter(e => inHomeScope(e.location));
         const scopedBySite = Object.fromEntries(
-          Object.entries(data.bySite).filter(([site]) => inScope(site))
+          Object.entries(data.bySite).filter(([site]) => inHomeScope(site))
         );
         const compliantCount = scopedEmployees.filter(e => e.status === 'compliant').length;
         data = {
@@ -167,9 +179,9 @@ const ManagerDashboard = () => {
             percentCompliant: scopedEmployees.length > 0 ? Math.round((compliantCount / scopedEmployees.length) * 100) : 0,
           },
           alerts: {
-            midMonth: data.alerts.midMonth.filter(e => inScope(e.location)),
-            needsNotice: data.alerts.needsNotice.filter(e => inScope(e.location)),
-            endOfMonth: data.alerts.endOfMonth.filter(e => inScope(e.location)),
+            midMonth: data.alerts.midMonth.filter(e => inHomeScope(e.location)),
+            needsNotice: data.alerts.needsNotice.filter(e => inHomeScope(e.location)),
+            endOfMonth: data.alerts.endOfMonth.filter(e => inHomeScope(e.location)),
           },
         };
       }
@@ -184,19 +196,16 @@ const ManagerDashboard = () => {
 
   const fetchCheckIns = async () => {
     try {
-      const response = await axios.get(`${BACKEND_URL}/api/checkin`);
-      let checkInsData = response.data || [];
-
-      // Filter by location if specified, else restrict to the supervisor's scope
-      if (checkInLocationFilter !== 'all') {
-        checkInsData = checkInsData.filter(checkIn =>
-          checkIn.location === checkInLocationFilter
-        );
-      } else if (isScopedSupervisor) {
-        checkInsData = checkInsData.filter(checkIn => inScope(checkIn.location));
-      }
-
-      setCheckIns(checkInsData);
+      // The backend already scopes by the checked-in employee's home
+      // location (never trust client-side filtering for this). `location`
+      // narrows by where training happened (scoped supervisor's use case);
+      // `homeSite` narrows the roster itself (all-site supervisor's use case).
+      const params = {
+        location: isScopedSupervisor && locationFilter !== 'all' ? locationFilter : undefined,
+        homeSite: !isScopedSupervisor && locationFilter !== 'all' ? locationFilter : undefined,
+      };
+      const response = await axios.get(`${BACKEND_URL}/api/checkin`, { params });
+      setCheckIns(response.data || []);
     } catch (error) {
       console.error('Error fetching check-ins:', error);
       setCheckIns([]);
@@ -237,8 +246,15 @@ const ManagerDashboard = () => {
 
   const handleDownloadReport = async () => {
     try {
+      // /api/reports filters by check-in/session location, not home location —
+      // only meaningful to pass workSite here for a scoped supervisor (whose
+      // locationFilter means training location); an all-site supervisor's
+      // home-location filter doesn't map onto this endpoint, so this report
+      // stays company-wide for them.
       const params = {
-        workSite: workSite !== 'all' ? workSite : scopedSitesParam,
+        workSite: isScopedSupervisor
+          ? (locationFilter !== 'all' ? locationFilter : allowedSites.join(','))
+          : undefined,
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
       };
@@ -340,15 +356,15 @@ const ManagerDashboard = () => {
           </Typography>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <FormControl fullWidth>
-              <InputLabel>Work Site</InputLabel>
+              <InputLabel>{locationFilterLabel}</InputLabel>
               <Select
-                value={workSite}
-                label="Work Site"
-                onChange={(e) => setWorkSite(e.target.value)}
+                value={locationFilter}
+                label={locationFilterLabel}
+                onChange={(e) => setLocationFilter(e.target.value)}
               >
                 {workSites.map((site) => (
                   <MenuItem key={site} value={site}>
-                    {site === 'all' ? 'All Sites' : site}
+                    {site === 'all' ? (isScopedSupervisor ? 'All (My Staff)' : 'All Sites') : site}
                   </MenuItem>
                 ))}
               </Select>
@@ -527,7 +543,7 @@ const ManagerDashboard = () => {
           <Grid item xs={12} sm={6} md={3}>
             <Paper sx={{ p: 3, textAlign: 'center' }}>
               <Typography variant="h6" gutterBottom>
-                Training Completed {workSite !== 'all' ? `(${workSite})` : '(All Sites)'}
+                Training Completed {locationFilter !== 'all' ? `(${locationFilter})` : ''}
               </Typography>
               {loading ? (
                 <CircularProgress size={24} />
@@ -535,7 +551,7 @@ const ManagerDashboard = () => {
                 <Alert severity="error">{error}</Alert>
               ) : (
                 <Typography variant="h4">
-                  {workSite !== 'all' ? (stats?.trainingCompleted || 0) : (stats?.trainingCompletedAllSites || 0)}
+                  {locationFilter !== 'all' ? (stats?.trainingCompleted || 0) : (stats?.trainingCompletedAllSites || 0)}
                 </Typography>
               )}
             </Paper>
@@ -562,31 +578,14 @@ const ManagerDashboard = () => {
         <Paper sx={{ p: 3, mb: 4 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6">
-              Employees Needing Training
+              Employees Needing Training {locationFilter !== 'all' && !isScopedSupervisor ? `(${locationFilter})` : ''}
             </Typography>
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-              <FormControl size="small" sx={{ minWidth: 150 }}>
-                <InputLabel>Filter by Site</InputLabel>
-                <Select
-                  value={employeeFilter}
-                  label="Filter by Site"
-                  onChange={(e) => setEmployeeFilter(e.target.value)}
-                >
-                  <MenuItem value="all">All Sites</MenuItem>
-                  {workSites.filter(site => site !== 'all').map((site) => (
-                    <MenuItem key={site} value={site}>
-                      {site}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <Button
-                variant="outlined"
-                onClick={() => setShowEmployeesNeedingTraining(!showEmployeesNeedingTraining)}
-              >
-                {showEmployeesNeedingTraining ? 'Hide' : 'Show'} List
-              </Button>
-            </Box>
+            <Button
+              variant="outlined"
+              onClick={() => setShowEmployeesNeedingTraining(!showEmployeesNeedingTraining)}
+            >
+              {showEmployeesNeedingTraining ? 'Hide' : 'Show'} List
+            </Button>
           </Box>
           {showEmployeesNeedingTraining && stats?.employeesNeedingTraining && (
             <TableContainer sx={{ maxHeight: 400, overflow: 'auto' }}>
@@ -601,7 +600,6 @@ const ManagerDashboard = () => {
                 </TableHead>
                 <TableBody>
                   {stats.employeesNeedingTraining
-                    .filter(emp => employeeFilter === 'all' || emp.location === employeeFilter)
                     .map((emp) => {
                       const getStatusColor = () => {
                         if (emp.status === 'complete') return '#4caf50'; // Green
@@ -646,7 +644,13 @@ const ManagerDashboard = () => {
         </Paper>
 
         {/* Employee Hours Tracker */}
-        <EmployeeHoursTracker allowedLocations={isScopedSupervisor ? allowedSites : null} />
+        <EmployeeHoursTracker
+          allowedLocations={
+            isScopedSupervisor
+              ? allowedSites
+              : (locationFilter !== 'all' ? [locationFilter] : null)
+          }
+        />
 
         {/* Completed Trainings */}
         <Paper sx={{ p: 4, mt: 4 }}>
@@ -679,23 +683,8 @@ const ManagerDashboard = () => {
         <Paper sx={{ p: 4, mt: 4 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h5" gutterBottom>
-              Recent Check-Ins
+              Recent Check-Ins {locationFilter !== 'all' ? `(${locationFilter})` : ''}
             </Typography>
-            <FormControl size="small" sx={{ minWidth: 150 }}>
-              <InputLabel>Filter by Location</InputLabel>
-              <Select
-                value={checkInLocationFilter}
-                label="Filter by Location"
-                onChange={(e) => setCheckInLocationFilter(e.target.value)}
-              >
-                <MenuItem value="all">All Locations</MenuItem>
-                {workSites.filter(site => site !== 'all').map((site) => (
-                  <MenuItem key={site} value={site}>
-                    {site}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
           </Box>
           <List>
             {checkIns.slice(0, 10).map((checkIn) => (

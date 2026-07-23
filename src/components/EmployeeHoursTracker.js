@@ -18,12 +18,13 @@ import {
   Chip,
 } from '@mui/material';
 import axios from 'axios';
+import { SITES } from '../constants/sites';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
 
 const EmployeeHoursTracker = ({ allowedLocations } = {}) => {
   const [employees, setEmployees] = useState([]);
-  const [locations] = useState(allowedLocations && allowedLocations.length ? allowedLocations : ['MCAC', 'Ramsey Creek Beach', 'Double Oaks', 'Cordelia', 'ERRC', 'NRRC', 'Rays Splash Planet','Marion Diehl']);
+  const [locations] = useState(allowedLocations && allowedLocations.length ? allowedLocations : SITES);
   const [selectedLocation, setSelectedLocation] = useState('all');
   const [loading, setLoading] = useState(false);
 
@@ -62,12 +63,13 @@ const EmployeeHoursTracker = ({ allowedLocations } = {}) => {
     }
   };
 
+  // Roster is scoped by home location — an employee's home base, not the
+  // (possibly multi-site) `locations` field they're generally assigned to.
   const filteredEmployees = employees.filter(emp => {
-    const empLocations = emp.locations || [];
-    if (allowedLocations && allowedLocations.length && !empLocations.some(loc => allowedLocations.includes(loc))) {
+    if (allowedLocations && allowedLocations.length && !allowedLocations.includes(emp.homeLocation)) {
       return false;
     }
-    return selectedLocation === 'all' || empLocations.includes(selectedLocation);
+    return selectedLocation === 'all' || emp.homeLocation === selectedLocation;
   });
 
   const getEmployeeStatus = (hours) => {
@@ -113,10 +115,10 @@ const EmployeeHoursTracker = ({ allowedLocations } = {}) => {
           Employee Hours Tracker
         </Typography>
         <FormControl size="small" sx={{ minWidth: 150 }}>
-          <InputLabel>Filter by Location</InputLabel>
+          <InputLabel>Filter by Home Location</InputLabel>
           <Select
             value={selectedLocation}
-            label="Filter by Location"
+            label="Filter by Home Location"
             onChange={(e) => setSelectedLocation(e.target.value)}
           >
             <MenuItem value="all">All Locations</MenuItem>
@@ -156,7 +158,7 @@ const EmployeeHoursTracker = ({ allowedLocations } = {}) => {
                     }}
                   >
                     <TableCell>{emp.name}</TableCell>
-                    <TableCell>{(emp.locations && emp.locations.join(', ')) || 'Unknown'}</TableCell>
+                    <TableCell>{emp.homeLocation || 'Unknown'}</TableCell>
                     <TableCell align="right">{emp.totalHours ? emp.totalHours.toFixed(1) : '0.0'}</TableCell>
                     <TableCell align="right">{emp.hoursLeft ? emp.hoursLeft.toFixed(1) : '0.0'}</TableCell>
                     <TableCell>

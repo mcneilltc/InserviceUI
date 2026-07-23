@@ -28,6 +28,7 @@ import {
   Assessment as AssessmentIcon,
   CloudUpload as CloudUploadIcon,
   Logout as LogoutIcon,
+  VerifiedUser as VerifiedUserIcon,
 } from '@mui/icons-material';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -41,6 +42,7 @@ const ALL_MENU_ITEMS = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/trainer-dashboard', roles: ['trainer'] },
   { text: 'Add Training', icon: <AddIcon />, path: '/add-training', roles: ['supervisor', 'trainer'] },
   { text: 'Upload Sheet', icon: <CloudUploadIcon />, path: '/upload-inservice', roles: ['supervisor', 'trainer'] },
+  { text: 'Certifications', icon: <VerifiedUserIcon />, path: '/certifications', roles: ['supervisor'] },
   { text: 'Manage Employees', icon: <PeopleIcon />, path: '/manage-employees', roles: ['supervisor'] },
   { text: 'Manage Topics', icon: <TopicIcon />, path: '/manage-topics', roles: ['supervisor'] },
   { text: 'Manage Trainers', icon: <PersonIcon />, path: '/manage-trainers', roles: ['supervisor'] },
