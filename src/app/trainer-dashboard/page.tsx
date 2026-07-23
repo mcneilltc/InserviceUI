@@ -51,12 +51,12 @@ const TrainerDashboard = () => {
   const { user } = useAuth();
 
   const { data: trainer } = useQuery({
-    queryKey: ['trainer', user?.trainerId],
+    queryKey: ['employee', user?.employeeId],
     queryFn: async () => {
-      const { data } = await axios.get(`${BACKEND_URL}/api/trainers/${user.trainerId}`);
+      const { data } = await axios.get(`${BACKEND_URL}/api/employees/${user.employeeId}`);
       return data;
     },
-    enabled: !!user?.trainerId,
+    enabled: !!user?.employeeId,
   });
 
   const { data: sessions = [], isLoading } = useQuery({
@@ -74,7 +74,7 @@ const TrainerDashboard = () => {
         : session.trainer
         ? [session.trainer]
         : [];
-      return trainerIds.includes(user?.trainerId);
+      return trainerIds.includes(user?.employeeId);
     })
     .sort((a, b) => moment(b.date).valueOf() - moment(a.date).valueOf());
 

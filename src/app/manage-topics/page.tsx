@@ -19,6 +19,10 @@ import {
 //   DialogActions,
   Snackbar,
   Alert,
+  Checkbox,
+  FormControlLabel,
+  Chip,
+  Box,
 } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import axios from 'axios';
@@ -27,12 +31,16 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 interface Topic {
   id: string;
   name: string;
+  requiresDetail?: boolean;
 }
 
 const ManageTopics = () => {
   const queryClient = useQueryClient();
   const [newTopic, setNewTopic] = useState('');
+  const [newTopicRequiresDetail, setNewTopicRequiresDetail] = useState(false);
   const [editTopic, setEditTopic] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editRequiresDetail, setEditRequiresDetail] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
   const { data: topics = [] } = useQuery<Topic[]>({
@@ -53,17 +61,20 @@ const ManageTopics = () => {
   };
 
   const createMutation = useMutation({
-    mutationFn: (topicName: string) => axios.post('/api/training-topics', { topicName }),
+    mutationFn: ({ topicName, requiresDetail }: { topicName: string; requiresDetail: boolean }) =>
+      axios.post('/api/training-topics', { topicName, requiresDetail }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['topics'] });
       setNewTopic('');
+      setNewTopicRequiresDetail(false);
       setSnackbar({ open: true, message: 'Topic added successfully', severity: 'success' });
     },
     onError: (err) => handleError(err, 'Failed to add topic')
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, topicName }: { id: string; topicName: string }) => axios.put(`/api/training-topics/${id}`, { topicName }),
+    mutationFn: ({ id, topicName, requiresDetail }: { id: string; topicName: string; requiresDetail: boolean }) =>
+      axios.put(`/api/training-topics/${id}`, { topicName, requiresDetail }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['topics'] });
       setEditTopic(null);
@@ -86,15 +97,21 @@ const ManageTopics = () => {
       setSnackbar({ open: true, message: 'Topic name cannot be empty', severity: 'error' });
       return;
     }
-    createMutation.mutate(newTopic);
+    createMutation.mutate({ topicName: newTopic, requiresDetail: newTopicRequiresDetail });
   };
 
-  const handleEditTopic = (id: string, updatedName: string) => {
-    if (!updatedName.trim()) {
+  const startEditing = (topic: Topic) => {
+    setEditTopic(topic.id);
+    setEditName(topic.name);
+    setEditRequiresDetail(!!topic.requiresDetail);
+  };
+
+  const handleSaveEdit = (id: string) => {
+    if (!editName.trim()) {
       setSnackbar({ open: true, message: 'Topic name cannot be empty', severity: 'error' });
       return;
     }
-    updateMutation.mutate({ id, topicName: updatedName });
+    updateMutation.mutate({ id, topicName: editName, requiresDetail: editRequiresDetail });
   };
 
   const handleDeleteTopic = (id: string) => {
@@ -107,8 +124,8 @@ const ManageTopics = () => {
         <Typography variant="h4" component="h1" gutterBottom>
           Manage Topics
         </Typography>
-        <Grid container spacing={2} sx={{ mb: 4 }}>
-          <Grid>
+        <Grid container spacing={2} alignItems="center" sx={{ mb: 4 }}>
+          <Grid size={12}>
             <TextField
               fullWidth
               label="New Topic"
@@ -116,8 +133,19 @@ const ManageTopics = () => {
               onChange={(e) => setNewTopic(e.target.value)}
             />
           </Grid>
-          <Grid>
-            <Button variant="contained" color="primary" fullWidth onClick={handleAddTopic}>
+          <Grid size={12}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={newTopicRequiresDetail}
+                  onChange={(e) => setNewTopicRequiresDetail(e.target.checked)}
+                />
+              }
+              label="Requires additional detail when selected (e.g. First Aid, Other) — trainers will be asked to describe exactly what was covered"
+            />
+          </Grid>
+          <Grid size={12}>
+            <Button variant="contained" color="primary" onClick={handleAddTopic}>
               Add Topic
             </Button>
           </Grid>
@@ -125,24 +153,46 @@ const ManageTopics = () => {
         <List>
         {topics.map((topic) => (
             <ListItem key={topic.id}>
-              <ListItemText
-                primary={
-                  editTopic === topic.id ? (
-                    <TextField
-                      fullWidth
-                      defaultValue={topic.name}
-                      onBlur={(e) => handleEditTopic(topic.id, e.target.value)}
-                      autoFocus
-                    />
-                  ) : (
-                    topic.name
-                  )
-                }
-              />
+              {editTopic === topic.id ? (
+                <ListItemText
+                  primary={
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <TextField
+                        fullWidth
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        autoFocus
+                        size="small"
+                      />
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            checked={editRequiresDetail}
+                            onChange={(e) => setEditRequiresDetail(e.target.checked)}
+                          />
+                        }
+                        label="Requires additional detail when selected"
+                      />
+                      <Button size="small" variant="contained" onClick={() => handleSaveEdit(topic.id)} sx={{ alignSelf: 'flex-start' }}>
+                        Save
+                      </Button>
+                    </Box>
+                  }
+                />
+              ) : (
+                <ListItemText
+                  primary={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      {topic.name}
+                      {topic.requiresDetail && <Chip label="Requires detail" size="small" color="info" />}
+                    </Box>
+                  }
+                />
+              )}
               <ListItemSecondaryAction>
-              <IconButton
+                <IconButton
                   edge="end"
-                  onClick={() => (editTopic === topic.id ? setEditTopic(null) : setEditTopic(topic.id))}
+                  onClick={() => (editTopic === topic.id ? setEditTopic(null) : startEditing(topic))}
                 >
                   <EditIcon />
                 </IconButton>

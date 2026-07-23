@@ -68,7 +68,7 @@ const Reports = () => {
         </Typography>
         <Grid container spacing={2} sx={{ mb: 4 }}>
           {/* Date Range Filters */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <LocalizationProvider dateAdapter={AdapterMoment}>
               <DatePicker
                 label="Start Date"
@@ -78,7 +78,7 @@ const Reports = () => {
               />
             </LocalizationProvider>
           </Grid>
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <LocalizationProvider dateAdapter={AdapterMoment}>
               <DatePicker
                 label="End Date"
@@ -90,7 +90,7 @@ const Reports = () => {
           </Grid>
 
           {/* Name Filter */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <TextField
               fullWidth
               label="Name"
@@ -100,7 +100,7 @@ const Reports = () => {
           </Grid>
 
           {/* Work Site Filter */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <FormControl fullWidth>
               <InputLabel>Work Site</InputLabel>
               <Select
@@ -119,7 +119,7 @@ const Reports = () => {
           </Grid>
 
           {/* Fetch Report Button */}
-          <Grid item xs={12}>
+          <Grid size={12}>
             <Button
               variant="contained"
               color="primary"

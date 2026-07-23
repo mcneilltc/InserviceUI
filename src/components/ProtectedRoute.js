@@ -11,8 +11,6 @@ const ROUTE_PERMISSIONS = [
   { prefix: '/trainer-dashboard', roles: ['trainer'] },
   { prefix: '/certifications', roles: ['supervisor'] },
   { prefix: '/manage-employees', roles: ['supervisor'] },
-  { prefix: '/manage-trainers', roles: ['supervisor'] },
-  { prefix: '/archived-trainers', roles: ['supervisor'] },
   { prefix: '/manage-topics', roles: ['supervisor'] },
   { prefix: '/add-training', roles: ['supervisor', 'trainer'] },
   { prefix: '/upload-inservice', roles: ['supervisor', 'trainer'] },

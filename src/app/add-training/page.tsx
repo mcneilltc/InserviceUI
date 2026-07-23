@@ -106,17 +106,16 @@ const AddTraining = () => {
     queryKey: ['topics'],
     queryFn: async () => {
       const { data } = await axios.get(`${BACKEND_URL}/api/training-topics`);
-      return data.map((t: any) => t.name || t);
-    }
-  });
-
-  const { data: trainers = [] as any[] } = useQuery({
-    queryKey: ['trainers'],
-    queryFn: async () => {
-      const { data } = await axios.get(`${BACKEND_URL}/api/trainers`);
       return data;
     }
   });
+
+  // Free-text detail captured for any selected topic flagged requiresDetail
+  // (e.g. "First Aid", "Other") — keyed by topic name.
+  const [topicDetails, setTopicDetails] = useState<Record<string, string>>({});
+
+  // Trainers are just employees with isTrainer === true — no separate collection.
+  const trainers = employees.filter((e: any) => e.isTrainer);
 
   const { data: trainingSessions = [] as any[] } = useQuery({
     queryKey: ['sessions'],
@@ -210,6 +209,7 @@ const AddTraining = () => {
         trainer: [],
         status: "scheduled",
       });
+      setTopicDetails({});
     },
     onError: (error: any) => {
       console.error("Error creating training session:", error);
@@ -244,12 +244,23 @@ const AddTraining = () => {
         setSnackbar({ open: true, message: "Please enter session length", severity: "error" });
         return;
     }
+    const missingDetail = formData.topics.find(
+      (name) => topics.find((t: any) => t.name === name)?.requiresDetail && !topicDetails[name]?.trim()
+    );
+    if (missingDetail) {
+      setSnackbar({ open: true, message: `Please describe what was covered under "${missingDetail}"`, severity: "error" });
+      return;
+    }
+    const resolvedTopics = formData.topics.map((name) => {
+      const detail = topicDetails[name]?.trim();
+      return detail ? `${name} — ${detail}` : name;
+    });
     const sessionData = {
       date: moment(formData.date).format('YYYY-MM-DD'),
       location: formData.location,
       startTime: formData.startTime || undefined,
       length: parseInt(formData.length),
-      topics: formData.topics,
+      topics: resolvedTopics,
       trainer: formData.trainer,
       trainees: []
     };
@@ -394,7 +405,6 @@ const AddTraining = () => {
 
       queryClient.invalidateQueries({ queryKey: ['sessions'] });
       queryClient.invalidateQueries({ queryKey: ['employees'] });
-      queryClient.invalidateQueries({ queryKey: ['trainers'] });
 
       const { employeesCredited, totalEmployeeHours, trainersCredited } = response.data;
       setSnackbar({
@@ -414,15 +424,15 @@ const AddTraining = () => {
   };
 
   const handleAddNewTopic = async () => {
+    if (!newTopic.trim()) return;
     try {
-      // In development, you can optionally mock appending
-      queryClient.invalidateQueries({ queryKey: ['topics'] });
-      setFormData((prev) => ({ ...prev, topics: [...prev.topics, newTopic] }));
+      const { data } = await axios.post(`${BACKEND_URL}/api/training-topics`, {
+        topicName: newTopic,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['topics'] });
+      setFormData((prev) => ({ ...prev, topics: [...prev.topics, data.topic.name] }));
       setOpenNewTopicModal(false);
       setNewTopic("");
-
-      // In production, uncomment this API call:
-      // await axios.post('/api/topics', { name: newTopic });
     } catch (error) {
       console.error("Error adding new topic:", error);
       setSnackbar({
@@ -612,25 +622,23 @@ const AddTraining = () => {
         <form onSubmit={handleSubmit}>
           <Grid container spacing={2}>
             {/* Date Picker */}
-            <Grid item xs={12} md={6} sx={{ minWidth: '250px' }}>
+            <Grid size={{ xs: 12, md: 6 }} sx={{ minWidth: '250px' }}>
               <LocalizationProvider dateAdapter={AdapterDateFns}>
                 <DatePicker
                   label="Training Date"
-                  value={formData.date}
+                  value={formData.date ?? null}
                   onChange={handleDateChange}
-                  renderInput={(params) => (
-                    <TextField {...params} fullWidth required />
-                  )}
+                  slotProps={{ textField: { fullWidth: true, required: true } }}
                 />
               </LocalizationProvider>
             </Grid>
 
             {/* Location */}
-            <Grid item xs={12} md={6} sx={{ minWidth: '250px' }}>
+            <Grid size={{ xs: 12, md: 6 }} sx={{ minWidth: '250px' }}>
               <FormControl fullWidth required>
                 <InputLabel>Training Location</InputLabel>
                 <Select
-                  value={formData.location}
+                  value={formData.location ?? ""}
                   label="Training Location"
                   onChange={handleChange("location")}
                 >
@@ -644,11 +652,11 @@ const AddTraining = () => {
             </Grid>
 
             {/* Start Time */}
-            <Grid item xs={12} md={6} sx={{ minWidth: '250px' }}>
+            <Grid size={{ xs: 12, md: 6 }} sx={{ minWidth: '250px' }}>
               <FormControl fullWidth required>
                 <InputLabel>Start Time</InputLabel>
                 <Select
-                  value={formData.startTime}
+                  value={formData.startTime ?? ""}
                   label="Start Time"
                   onChange={handleChange("startTime")}
                 >
@@ -662,27 +670,29 @@ const AddTraining = () => {
             </Grid>
 
             {/* Training Length */}
-            <Grid item xs={12} md={6} sx={{ minWidth: '250px' }}>
+            <Grid size={{ xs: 12, md: 6 }} sx={{ minWidth: '250px' }}>
               <TextField
                 fullWidth
                 required
                 type="number"
                 label="Training Length (minutes)"
-                value={formData.length}
+                value={formData.length ?? ""}
                 onChange={handleChange("length")}
               />
             </Grid>
 
             {/* Topics */}
-            <Grid item xs={12} md={6} sx={{ minWidth: '250px' }}>
+            <Grid size={{ xs: 12, md: 6 }} sx={{ minWidth: '250px' }}>
               <FormControl fullWidth required>
                 <InputLabel>Training Topics</InputLabel>
                 <Select
                   multiple
-                  value={formData.topics}
+                  value={formData.topics ?? []}
                   label="Training Topics"
                   onChange={(e) => {
-                    const value = e.target.value as string[];
+                    const value = Array.isArray(e.target.value)
+                      ? e.target.value as string[]
+                      : String(e.target.value || '').split(',').filter(Boolean);
                     if (value.includes("new")) {
                       setOpenNewTopicModal(true);
                       return;
@@ -691,9 +701,9 @@ const AddTraining = () => {
                   }}
                   renderValue={(selected) => (selected as string[]).join(", ")}
                 >
-                  {topics.map((topic, index) => (
-                    <MenuItem key={`topic-${index}-${topic}`} value={topic}>
-                      {topic}
+                  {topics.map((topic: any, index) => (
+                    <MenuItem key={`topic-${index}-${topic.name}`} value={topic.name}>
+                      {topic.name}
                     </MenuItem>
                   ))}
                   {isSupervisor && <MenuItem value="new">+ Add New Topic</MenuItem>}
@@ -701,18 +711,38 @@ const AddTraining = () => {
               </FormControl>
             </Grid>
 
+            {/* Detail fields for any selected topic flagged "requires detail" (e.g. First Aid, Other) */}
+            {formData.topics
+              .filter((name) => topics.find((t: any) => t.name === name)?.requiresDetail)
+              .map((name) => (
+                <Grid size={12} key={`detail-${name}`}>
+                  <TextField
+                    fullWidth
+                    required
+                    label={`${name} — what was covered?`}
+                    value={topicDetails[name] || ""}
+                    onChange={(e) =>
+                      setTopicDetails((prev) => ({ ...prev, [name]: e.target.value }))
+                    }
+                    helperText={`"${name}" needs a specific description of what this session actually covered.`}
+                  />
+                </Grid>
+              ))}
+
             {/* Trainer */}
-            <Grid item xs={12} md={6} sx={{ minWidth: '250px' }}>
+            <Grid size={{ xs: 12, md: 6 }} sx={{ minWidth: '250px' }}>
               <FormControl fullWidth required>
                 <InputLabel>Trainers</InputLabel>
                 <Select
                   multiple
-                  value={formData.trainer}
+                  value={formData.trainer ?? []}
                   label="Trainers"
                   onChange={(e) =>
                     setFormData((prev) => ({
                       ...prev,
-                      trainer: e.target.value as any,
+                      trainer: Array.isArray(e.target.value)
+                        ? e.target.value
+                        : String(e.target.value || '').split(',').filter(Boolean),
                     }))
                   }
                   renderValue={(selected) =>
@@ -738,7 +768,7 @@ const AddTraining = () => {
             </Grid>
 
             {/* Submit Button */}
-            <Grid item xs={12}>
+            <Grid size={12}>
               <Button
                 type="submit"
                 variant="contained"
@@ -768,7 +798,7 @@ const AddTraining = () => {
             <TextField
               size="small"
               placeholder="Search sessions..."
-              value={searchQuery}
+              value={searchQuery ?? ""}
               onChange={(e) => setSearchQuery(e.target.value)}
               InputProps={{
                 startAdornment: (
@@ -798,7 +828,7 @@ const AddTraining = () => {
             </AccordionSummary>
             <AccordionDetails>
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={6} md={4}>
+                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                   <FormControl fullWidth size="small">
                     <InputLabel>Status</InputLabel>
                     <Select
@@ -814,7 +844,7 @@ const AddTraining = () => {
                     </Select>
                   </FormControl>
                 </Grid>
-                <Grid item xs={12} sm={6} md={4}>
+                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                   <FormControl fullWidth size="small">
                     <InputLabel>Trainer</InputLabel>
                     <Select
@@ -831,7 +861,7 @@ const AddTraining = () => {
                     </Select>
                   </FormControl>
                 </Grid>
-                <Grid item xs={12} sm={6} md={4}>
+                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                   <FormControl fullWidth size="small">
                     <InputLabel>Location</InputLabel>
                     <Select
@@ -848,7 +878,7 @@ const AddTraining = () => {
                     </Select>
                   </FormControl>
                 </Grid>
-                <Grid item xs={12} sm={6} md={4}>
+                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                   <FormControl fullWidth size="small">
                     <InputLabel>Topic</InputLabel>
                     <Select
@@ -857,23 +887,21 @@ const AddTraining = () => {
                       onChange={(e) => setTopicFilter(e.target.value)}
                     >
                       <MenuItem value="all">All Topics</MenuItem>
-                      {topics.map((topic, index) => (
-                        <MenuItem key={`topic-filter-${index}-${topic}`} value={topic}>
-                          {topic}
+                      {topics.map((topic: any, index) => (
+                        <MenuItem key={`topic-filter-${index}-${topic.name}`} value={topic.name}>
+                          {topic.name}
                         </MenuItem>
                       ))}
                     </Select>
                   </FormControl>
                 </Grid>
-                <Grid item xs={12} sm={6} md={4}>
+                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                   <LocalizationProvider dateAdapter={AdapterDateFns}>
                     <DatePicker
                       label="Filter by Date"
-                      value={dateFilter}
+                      value={dateFilter ?? null}
                       onChange={setDateFilter}
-                      renderInput={(params) => (
-                        <TextField {...params} size="small" fullWidth />
-                      )}
+                      slotProps={{ textField: { size: 'small', fullWidth: true } }}
                     />
                   </LocalizationProvider>
                 </Grid>
@@ -1019,7 +1047,7 @@ const AddTraining = () => {
             margin="dense"
             label="Topic Name"
             fullWidth
-            value={newTopic}
+            value={newTopic ?? ""}
             onChange={(e) => setNewTopic(e.target.value)}
           />
         </DialogContent>
@@ -1070,7 +1098,7 @@ const AddTraining = () => {
           <Box sx={{ mt: 2 }}>
             <Grid container spacing={2}>
               {employees.map((employee, index) => (
-                <Grid item xs={12} key={employee.id || `employee-${index}-${employee.name}`}>
+                <Grid size={12} key={employee.id || `employee-${index}-${employee.name}`}>
                   <Paper
                     sx={{
                       p: 1,
@@ -1129,7 +1157,7 @@ const AddTraining = () => {
           <FormControl fullWidth required sx={{ mb: 2 }}>
             <InputLabel>Employee</InputLabel>
             <Select
-              value={manualEmployeeData.employeeId}
+              value={manualEmployeeData.employeeId ?? ""}
               label="Employee"
               onChange={(e) => setManualEmployeeData({ employeeId: e.target.value })}
             >

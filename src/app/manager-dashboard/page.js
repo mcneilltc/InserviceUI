@@ -377,10 +377,10 @@ const ManagerDashboard = () => {
                 label="Period"
                 onChange={(e) => setPeriod(e.target.value)}
               >
-                {/* <MenuItem value="day">Day</MenuItem>
+                <MenuItem value="day">Day</MenuItem>
                 <MenuItem value="week">Week</MenuItem>
                 <MenuItem value="month">Month</MenuItem>
-                <MenuItem value="year">Year</MenuItem> */}
+                <MenuItem value="year">Year</MenuItem>
                 <MenuItem value="custom">Select Date Range</MenuItem>
               </Select>
             </FormControl>
@@ -416,7 +416,7 @@ const ManagerDashboard = () => {
 
         {/* Graphical Overview */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
-          <Grid item xs={12} md={4}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <Card sx={{ height: '100%', borderRadius: 3, boxShadow: 3 }}>
               <CardContent sx={{ textAlign: 'center' }}>
                 <Typography variant="h6" gutterBottom fontWeight="bold">
@@ -462,10 +462,10 @@ const ManagerDashboard = () => {
             </Card>
           </Grid>
           
-          <Grid item xs={12} md={8}>
+          <Grid size={{ xs: 12, md: 8 }}>
             <Grid container spacing={2}>
               {complianceData && Object.entries(complianceData.bySite).map(([siteName, siteStats]) => (
-                <Grid item xs={12} sm={6} key={siteName}>
+                <Grid size={{ xs: 12, sm: 6 }} key={siteName}>
                   <Card sx={{ p: 2, borderRadius: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
                     <Box sx={{ width: 80, height: 80, position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                       <Doughnut 
@@ -508,7 +508,7 @@ const ManagerDashboard = () => {
 
         {/* Statistics Cards */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <Paper sx={{ p: 3, textAlign: 'center' }}>
               <Typography variant="h6" gutterBottom>
                 Completions
@@ -524,7 +524,7 @@ const ManagerDashboard = () => {
               )}
             </Paper>
           </Grid>
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <Paper sx={{ p: 3, textAlign: 'center' }}>
               <Typography variant="h6" gutterBottom>
                 Need to Complete
@@ -540,7 +540,7 @@ const ManagerDashboard = () => {
               )}
             </Paper>
           </Grid>
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <Paper sx={{ p: 3, textAlign: 'center' }}>
               <Typography variant="h6" gutterBottom>
                 Training Completed {locationFilter !== 'all' ? `(${locationFilter})` : ''}
@@ -556,7 +556,7 @@ const ManagerDashboard = () => {
               )}
             </Paper>
           </Grid>
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <Paper sx={{ p: 3, textAlign: 'center' }}>
               <Typography variant="h6" gutterBottom>
                 Total Sessions

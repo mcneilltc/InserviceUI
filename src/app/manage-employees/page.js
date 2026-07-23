@@ -40,7 +40,7 @@ import {
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterMoment } from '@mui/x-date-pickers/AdapterMoment';
-import { Edit as EditIcon, Archive as ArchiveIcon, Add as AddIcon, LocationOn as LocationIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { Edit as EditIcon, Archive as ArchiveIcon, Unarchive as UnarchiveIcon, Add as AddIcon, LocationOn as LocationIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import axios from 'axios';
 import moment from 'moment';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -69,6 +69,7 @@ const ManageEmployees = () => {
     email: '',
     alternateEmails: '',
     position: '',
+    phone: '',
     hireDate: moment(),
     locations: [],
     homeLocation: '',
@@ -76,6 +77,7 @@ const ManageEmployees = () => {
     badgeNumber: '',
     isSupervisor: false,
     supervisorScope: 'locations',
+    isTrainer: false,
   });
   const [activeTab, setActiveTab] = useState(0);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
@@ -149,10 +151,11 @@ const ManageEmployees = () => {
     if (employee) {
       setEditingEmployee(employee);
       setFormData({
-        name: employee.name,
-        email: employee.email,
+        name: employee.name || '',
+        email: employee.email || '',
         alternateEmails: (employee.alternateEmails || []).join(', '),
-        position: employee.position,
+        position: employee.position || '',
+        phone: employee.phone || '',
         hireDate: moment(employee.hireDate),
         locations: employee.locations || [],
         homeLocation: employee.homeLocation || (employee.locations && employee.locations[0]) || '',
@@ -160,6 +163,7 @@ const ManageEmployees = () => {
         badgeNumber: employee.badgeNumber || '',
         isSupervisor: employee.isSupervisor || false,
         supervisorScope: employee.supervisorScope || 'locations',
+        isTrainer: employee.isTrainer || false,
       });
     } else {
       setEditingEmployee(null);
@@ -175,6 +179,7 @@ const ManageEmployees = () => {
         badgeNumber: '',
         isSupervisor: false,
         supervisorScope: 'locations',
+        isTrainer: false,
       });
     }
     setOpenDialog(true);
@@ -195,6 +200,7 @@ const ManageEmployees = () => {
       badgeNumber: '',
       isSupervisor: false,
       supervisorScope: 'locations',
+      isTrainer: false,
     });
   };
 
@@ -245,6 +251,10 @@ const ManageEmployees = () => {
     if (window.confirm('Are you sure you want to archive this employee?')) {
       deleteMutation.mutate(employee.id);
     }
+  };
+
+  const handleUnarchive = (employee) => {
+    updateMutation.mutate({ id: employee.id, isActive: true });
   };
 
   const handleTabChange = (event, newValue) => {
@@ -426,7 +436,7 @@ const ManageEmployees = () => {
                 <TableCell>Locations</TableCell>
                 <TableCell>Role</TableCell>
                 <TableCell>Hire Date</TableCell>
-                {activeTab === 0 && <TableCell>Actions</TableCell>}
+                <TableCell>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -457,25 +467,37 @@ const ManageEmployees = () => {
                     </Box>
                   </TableCell>
                   <TableCell>
-                    {employee.isSupervisor ? (
-                      <Chip
-                        label={employee.supervisorScope === 'all' ? 'Supervisor (all sites)' : 'Supervisor'}
-                        size="small"
-                        color="secondary"
-                      />
-                    ) : '—'}
+                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                      {employee.isSupervisor && (
+                        <Chip
+                          label={employee.supervisorScope === 'all' ? 'Supervisor (all sites)' : 'Supervisor'}
+                          size="small"
+                          color="secondary"
+                        />
+                      )}
+                      {employee.isTrainer && (
+                        <Chip label="Trainer" size="small" color="info" />
+                      )}
+                      {!employee.isSupervisor && !employee.isTrainer && '—'}
+                    </Box>
                   </TableCell>
                   <TableCell>{moment(employee.hireDate).format('MMM D, YYYY')}</TableCell>
-                  {activeTab === 0 && (
-                    <TableCell>
-                      <IconButton onClick={() => handleOpenDialog(employee)}>
-                        <EditIcon />
+                  <TableCell>
+                    {activeTab === 0 ? (
+                      <>
+                        <IconButton onClick={() => handleOpenDialog(employee)}>
+                          <EditIcon />
+                        </IconButton>
+                        <IconButton onClick={() => handleArchive(employee)}>
+                          <ArchiveIcon />
+                        </IconButton>
+                      </>
+                    ) : (
+                      <IconButton onClick={() => handleUnarchive(employee)} title="Unarchive">
+                        <UnarchiveIcon />
                       </IconButton>
-                      <IconButton onClick={() => handleArchive(employee)}>
-                        <ArchiveIcon />
-                      </IconButton>
-                    </TableCell>
-                  )}
+                    )}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -516,6 +538,14 @@ const ManageEmployees = () => {
                   value={formData.position}
                   onChange={(e) => setFormData({ ...formData, position: e.target.value })}
                   required
+                />
+              </Grid>
+              <Grid size={12}>
+                <TextField
+                  fullWidth
+                  label="Phone"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                 />
               </Grid>
               <Grid size={12}>
@@ -635,7 +665,18 @@ const ManageEmployees = () => {
                   </FormControl>
                 </Grid>
               )}
-              {formData.isSupervisor && (
+              <Grid size={12}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={formData.isTrainer}
+                      onChange={(e) => setFormData({ ...formData, isTrainer: e.target.checked })}
+                    />
+                  }
+                  label="This employee is a trainer (can lead training sessions, gets the trainer dashboard)"
+                />
+              </Grid>
+              {(formData.isSupervisor || formData.isTrainer) && (
                 <Grid size={12}>
                   <TextField
                     fullWidth

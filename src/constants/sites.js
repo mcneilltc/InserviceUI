@@ -8,4 +8,5 @@ export const SITES = [
   'NRRC',
   'Rays Splash Planet',
   'Marion Diehl',
+  'RTA'
 ];

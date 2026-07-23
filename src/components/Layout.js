@@ -45,7 +45,6 @@ const ALL_MENU_ITEMS = [
   { text: 'Certifications', icon: <VerifiedUserIcon />, path: '/certifications', roles: ['supervisor'] },
   { text: 'Manage Employees', icon: <PeopleIcon />, path: '/manage-employees', roles: ['supervisor'] },
   { text: 'Manage Topics', icon: <TopicIcon />, path: '/manage-topics', roles: ['supervisor'] },
-  { text: 'Manage Trainers', icon: <PersonIcon />, path: '/manage-trainers', roles: ['supervisor'] },
   { text: 'Reports', icon: <AssessmentIcon />, path: '/reports', roles: ['supervisor', 'trainer'] },
   { text: 'Employee Portal', icon: <PersonIcon />, path: '/employee', roles: ['supervisor', 'trainer'] },
 ];
@@ -98,7 +97,7 @@ const Layout = ({ children }) => {
         {menuItems.map((item) => (
           <ListItem
             // button
-            key={item.text}
+            key={item.path}
             component={Link}
             href={item.path}
             selected={pathname === item.path}

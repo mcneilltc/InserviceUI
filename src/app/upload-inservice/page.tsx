@@ -38,6 +38,7 @@ interface TopicRow {
   extractedName: string;
   matchedId: string | null;
   matchedName: string | null;
+  detail?: string; // captured when the matched topic is flagged requiresDetail (e.g. First Aid, Other)
 }
 
 interface FormState {
@@ -80,7 +81,7 @@ export default function UploadInservicePage() {
   // Lookups returned by the backend alongside extraction
   const [lookups, setLookups] = useState<{
     trainers: { id: string; name: string; email: string }[];
-    topics: { id: string; name: string }[];
+    topics: { id: string; name: string; requiresDetail?: boolean }[];
     employees: { id: string; name: string; email: string; isSupervisor: boolean }[];
   } | null>(null);
 
@@ -254,8 +255,27 @@ export default function UploadInservicePage() {
       }
     }
 
+    const missingDetailRow = form.topics.find(t => {
+      const matchedTopic = lookups?.topics.find(lt => lt.id === t.matchedId);
+      return matchedTopic?.requiresDetail && !t.detail?.trim();
+    });
+    if (missingDetailRow) {
+      setSnackbar({
+        open: true,
+        message: `Please describe what was covered under "${missingDetailRow.matchedName || missingDetailRow.extractedName}"`,
+        severity: 'error',
+      });
+      setSaving(false);
+      return;
+    }
+
     const resolvedTopics = form.topics
-      .map(t => t.matchedName || t.extractedName)
+      .map(t => {
+        const name = t.matchedName || t.extractedName;
+        if (!name) return null;
+        const detail = t.detail?.trim();
+        return detail ? `${name} — ${detail}` : name;
+      })
       .filter(Boolean);
     if (resolvedTopics.length === 0) {
       setSnackbar({ open: true, message: 'Please confirm at least one topic before saving', severity: 'error' });
@@ -263,13 +283,10 @@ export default function UploadInservicePage() {
       return;
     }
 
-    // 1-trainer-to-12-employee ratio, waived if any selected trainer is also a
-    // supervisor (matched by email against employee records).
-    const isExemptFromRatio = form.trainers.some(trainerId => {
-      const trainerEmail = lookups?.trainers.find(t => t.id === trainerId)?.email;
-      if (!trainerEmail) return false;
-      return lookups?.employees.some(e => e.email === trainerEmail && e.isSupervisor);
-    });
+    // 1-trainer-to-12-employee ratio, waived if any selected trainer is also a supervisor.
+    const isExemptFromRatio = form.trainers.some(trainerId =>
+      lookups?.trainers.find(t => t.id === trainerId)?.isSupervisor
+    );
 
     if (!isExemptFromRatio) {
       const maxTrainees = form.trainers.length * 12;
@@ -330,7 +347,7 @@ export default function UploadInservicePage() {
 
       <Grid container spacing={3}>
         {/* Left column — Upload */}
-        <Grid item xs={12} md={5}>
+        <Grid size={{ xs: 12, md: 5 }}>
           <Paper sx={{ p: 3, height: '100%' }}>
             <Typography variant="h6" fontWeight={600} gutterBottom>
               1. Upload Sheet Pages
@@ -375,7 +392,7 @@ export default function UploadInservicePage() {
             {imagePreviews.length > 0 && (
               <Grid container spacing={1} sx={{ mb: 2 }}>
                 {imagePreviews.map((src, idx) => (
-                  <Grid item xs={6} key={idx}>
+                  <Grid size={6} key={idx}>
                     <Card sx={{ position: 'relative' }}>
                       <CardMedia
                         component="img"
@@ -422,7 +439,7 @@ export default function UploadInservicePage() {
         </Grid>
 
         {/* Right column — Review form */}
-        <Grid item xs={12} md={7}>
+        <Grid size={{ xs: 12, md: 7 }}>
           <Paper sx={{ p: 3 }}>
             <Typography variant="h6" fontWeight={600} gutterBottom>
               2. Review & Confirm Extracted Data
@@ -441,7 +458,7 @@ export default function UploadInservicePage() {
               <>
                 <Grid container spacing={2}>
                   {/* Trainers */}
-                  <Grid item xs={12} sm={6}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
                     <FormControl fullWidth>
                       <InputLabel>Trainers</InputLabel>
                       <Select
@@ -464,7 +481,7 @@ export default function UploadInservicePage() {
                   </Grid>
 
                   {/* Date */}
-                  <Grid item xs={12} sm={6}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
                       fullWidth
                       label="Date"
@@ -476,7 +493,7 @@ export default function UploadInservicePage() {
                   </Grid>
 
                   {/* Start time */}
-                  <Grid item xs={12} sm={4}>
+                  <Grid size={{ xs: 12, sm: 4 }}>
                     <TextField
                       fullWidth
                       label="Start Time"
@@ -488,7 +505,7 @@ export default function UploadInservicePage() {
                   </Grid>
 
                   {/* End time */}
-                  <Grid item xs={12} sm={4}>
+                  <Grid size={{ xs: 12, sm: 4 }}>
                     <TextField
                       fullWidth
                       label="End Time"
@@ -500,7 +517,7 @@ export default function UploadInservicePage() {
                   </Grid>
 
                   {/* Duration (auto-computed from start/end, overridable) */}
-                  <Grid item xs={12} sm={4}>
+                  <Grid size={{ xs: 12, sm: 4 }}>
                     <TextField
                       fullWidth
                       label="Duration (hours)"
@@ -513,7 +530,7 @@ export default function UploadInservicePage() {
                   </Grid>
 
                   {/* Location */}
-                  <Grid item xs={12}>
+                  <Grid size={12}>
                     <TextField
                       fullWidth
                       label="Location"
@@ -541,13 +558,14 @@ export default function UploadInservicePage() {
                       <TableRow>
                         <TableCell>Checked on Sheet</TableCell>
                         <TableCell>Match to Topic</TableCell>
+                        <TableCell>Detail</TableCell>
                         <TableCell sx={{ width: 48 }} />
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {form.topics.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={3}>
+                          <TableCell colSpan={4}>
                             <Typography variant="body2" color="text.secondary">
                               No topics detected — add one manually if the checklist page wasn&apos;t included.
                             </Typography>
@@ -578,6 +596,20 @@ export default function UploadInservicePage() {
                                 ))}
                               </Select>
                             </FormControl>
+                          </TableCell>
+                          <TableCell>
+                            {lookups?.topics.find(t => t.id === topic.matchedId)?.requiresDetail ? (
+                              <TextField
+                                size="small"
+                                variant="standard"
+                                value={topic.detail || ''}
+                                onChange={e => updateTopic(idx, 'detail', e.target.value)}
+                                placeholder="What was covered?"
+                                fullWidth
+                              />
+                            ) : (
+                              <Typography variant="body2" color="text.disabled">—</Typography>
+                            )}
                           </TableCell>
                           <TableCell>
                             <Tooltip title="Remove row">
@@ -667,10 +699,9 @@ export default function UploadInservicePage() {
                 </Stack>
 
                 {form.trainers.length > 0 && (() => {
-                  const isExempt = form.trainers.some(trainerId => {
-                    const trainerEmail = lookups?.trainers.find(t => t.id === trainerId)?.email;
-                    return trainerEmail && lookups?.employees.some(e => e.email === trainerEmail && e.isSupervisor);
-                  });
+                  const isExempt = form.trainers.some(trainerId =>
+                    lookups?.trainers.find(t => t.id === trainerId)?.isSupervisor
+                  );
                   const maxTrainees = form.trainers.length * 12;
                   const confirmedCount = form.employees.filter(e => e.matchedId).length;
                   return (
