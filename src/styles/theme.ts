@@ -1,6 +1,6 @@
 import { createTheme } from '@mui/material/styles';
 
-// UpSkilled brand palette, sampled from the logo (clock+arrow mark, navy background).
+// CertLedgerIQ brand palette, sampled from the logo (clock+arrow mark, navy background).
 export const BRAND_NAVY = '#06102C';
 export const BRAND_NAVY_SURFACE = '#101B3D'; // lightened navy for card/paper surfaces
 export const BRAND_BLUE = '#00C6FB';

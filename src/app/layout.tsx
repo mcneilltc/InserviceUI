@@ -32,7 +32,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <head>
-        <title>UpSkilled</title>
+        <title>CertLedgerIQ</title>
       </head>
       <body>
         <QueryClientProvider client={queryClient}>

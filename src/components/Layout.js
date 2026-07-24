@@ -33,7 +33,7 @@ import {
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from './AuthContext';
-import { BRAND_GRADIENT } from '../styles/theme';
+import BrandLogo from './BrandLogo';
 
 const drawerWidth = 240;
 
@@ -68,29 +68,8 @@ const Layout = ({ children }) => {
 
   const drawer = (
     <div>
-      <Toolbar sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
-        <Box
-          component="img"
-          src="/logo-icon.png"
-          alt=""
-          sx={{ width: 32, height: 32, borderRadius: '8px', flexShrink: 0 }}
-        />
-        <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 700 }}>
-          <Box
-            component="span"
-            sx={{
-              background: BRAND_GRADIENT,
-              WebkitBackgroundClip: 'text',
-              backgroundClip: 'text',
-              color: 'transparent',
-            }}
-          >
-            Up
-          </Box>
-          <Box component="span" sx={{ color: (theme) => theme.palette.mode === 'dark' ? '#fff' : 'text.primary' }}>
-            Skilled
-          </Box>
-        </Typography>
+      <Toolbar sx={{ display: 'flex', alignItems: 'center' }}>
+        <BrandLogo iconSize={32} fontSize={20} />
       </Toolbar>
       <Divider />
       <List>

@@ -7,6 +7,7 @@ import { Box, Typography, Divider, Alert, TextField, Button, CircularProgress, S
 import { Google as GoogleIcon, Microsoft as MicrosoftIcon } from '@mui/icons-material';
 import axios from 'axios';
 import { redirectToGoogle, redirectToMicrosoft, redirectToYahoo } from '../../lib/oauthProviders';
+import BrandLogo from '../../components/BrandLogo';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
 
@@ -89,12 +90,7 @@ const LoginPage = () => {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: 10, gap: 3 }}>
-      <Box
-        component="img"
-        src="/logo-full.png"
-        alt="UpSkilled"
-        sx={{ width: '100%', maxWidth: 200, borderRadius: 3, mb: 1 }}
-      />
+      <BrandLogo variant="stacked" iconSize={72} fontSize={28} sx={{ mb: 1 }} />
       <Typography variant="h6" component="h1" color="text.secondary" gutterBottom>
         Sign in
       </Typography>

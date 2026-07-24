@@ -14,6 +14,7 @@ import {
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import BrandLogo from '../../components/BrandLogo';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
 
@@ -75,12 +76,7 @@ export default function EmployeePortal() {
           p: 2,
         }}
       >
-        <Box
-          component="img"
-          src="/logo-full.png"
-          alt="UpSkilled"
-          sx={{ width: '100%', maxWidth: 220, borderRadius: 3, mb: 1 }}
-        />
+        <BrandLogo variant="stacked" iconSize={80} fontSize={32} forceLight sx={{ mb: 1 }} />
         <Typography variant="subtitle1" color="rgba(255,255,255,0.75)" sx={{ mb: 5 }}>
           Inservice Training Portal
         </Typography>
