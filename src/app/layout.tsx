@@ -3,6 +3,7 @@
 import "../lib/axiosConfig";
 import "./globals.css";
 import { ThemeProvider } from "@mui/material/styles";
+import InitColorSchemeScript from "@mui/material/InitColorSchemeScript";
 import CssBaseline from "@mui/material/CssBaseline";
 import { LocalizationProvider } from "@mui/x-date-pickers";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
@@ -30,9 +31,10 @@ export default function RootLayout({ children }) {
   const isPublicPath = PUBLIC_EXACT.includes(pathname || '') || PUBLIC_PREFIXES.some((p) => pathname?.startsWith(p));
 
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <title>CertLedgerIQ</title>
+        <InitColorSchemeScript attribute="class" />
       </head>
       <body>
         <QueryClientProvider client={queryClient}>

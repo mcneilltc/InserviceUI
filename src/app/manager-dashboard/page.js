@@ -32,6 +32,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Checkbox,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -41,6 +42,7 @@ import moment from 'moment';
 import { Download as DownloadIcon, FileDownload as FileDownloadIcon, Warning as WarningIcon, Error as ErrorIcon, CheckCircle as CheckCircleIcon } from '@mui/icons-material';
 import { Chart as ChartJS, ArcElement, Tooltip as ChartTooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
+import { useRouter } from 'next/navigation';
 import EmployeeHoursTracker from '../../components/EmployeeHoursTracker';
 import { useAuth } from '../../components/AuthContext';
 
@@ -49,6 +51,7 @@ ChartJS.register(ArcElement, ChartTooltip, Legend);
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
 
 const ManagerDashboard = () => {
+  const router = useRouter();
   const { user } = useAuth();
   const isScopedSupervisor = user?.role === 'supervisor' && user?.supervisorScope === 'locations';
 
@@ -70,28 +73,44 @@ const ManagerDashboard = () => {
   const [complianceData, setComplianceData] = useState(null);
   const [complianceLoading, setComplianceLoading] = useState(false);
 
-  // A single location filter whose MEANING depends on the supervisor's scope:
+  // A multi-select location filter whose MEANING depends on the supervisor's scope:
   // - Scoped supervisor (e.g. ERRC only): their roster is always their own
   //   home-based staff by default. This filter narrows by TRAINING location —
   //   where those staff actually checked in/trained — so they can see when
-  //   their people trained at another site.
+  //   their people trained at other sites. Useful for supervisors covering
+  //   several (but not all) sites who want a combined view of just those.
   // - All-site supervisor: there's no fixed home roster, so this filter picks
-  //   which site's HOME roster to view instead.
-  const [locationFilter, setLocationFilter] = useState('all');
+  //   which sites' HOME rosters to view instead.
+  // `['all']` means no narrowing; any other array is the set of selected sites.
+  const [locationFilters, setLocationFilters] = useState(['all']);
+  const isAllSites = locationFilters.includes('all');
   const locationFilterLabel = isScopedSupervisor ? 'Training Location' : 'Home Location';
+
+  const handleLocationFilterChange = (event) => {
+    const { value } = event.target;
+    const selected = typeof value === 'string' ? value.split(',') : value;
+    // Selecting "All" clears specific sites; selecting a specific site clears "All".
+    if (selected.length === 0 || selected[selected.length - 1] === 'all') {
+      setLocationFilters(['all']);
+    } else {
+      setLocationFilters(selected.filter((v) => v !== 'all'));
+    }
+  };
 
   const [period, setPeriod] = useState('month');
   const [startDate, setStartDate] = useState(moment().startOf('month'));
   const [endDate, setEndDate] = useState(moment().endOf('month'));
   const [showEmployeesNeedingTraining, setShowEmployeesNeedingTraining] = useState(false);
+  // Which compliance alert's employee list is currently open in the dialog
+  // below ('midMonth' | 'needsNotice'), or null when the dialog is closed.
+  const [openAlert, setOpenAlert] = useState(null);
 
-  const workSites = ['all', ...allSites];
   // Roster/home-location scoping — the security-relevant check, always
-  // enforced for a scoped supervisor regardless of what locationFilter means
+  // enforced for a scoped supervisor regardless of what locationFilters means
   // for them right now.
   const inHomeScope = (location) => {
     if (isScopedSupervisor) return allowedSites.includes(location);
-    if (locationFilter !== 'all') return location === locationFilter;
+    if (!isAllSites) return locationFilters.includes(location);
     return true;
   };
 
@@ -102,15 +121,15 @@ const ManagerDashboard = () => {
     fetchCompletedSessions();
     fetchComplianceStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [locationFilter, period, startDate, endDate]);
+  }, [locationFilters, period, startDate, endDate]);
 
   const fetchCompletedSessions = async () => {
     try {
       const response = await axios.get(`${BACKEND_URL}/api/sessions`);
       let completed = response.data.filter(s => s.status === 'completed');
 
-      if (locationFilter !== 'all') {
-        completed = completed.filter(s => s.location === locationFilter);
+      if (!isAllSites) {
+        completed = completed.filter(s => locationFilters.includes(s.location));
       } else if (isScopedSupervisor) {
         completed = completed.filter(s => allowedSites.includes(s.location));
       }
@@ -139,10 +158,10 @@ const ManagerDashboard = () => {
         period: period !== 'custom' ? period : undefined,
         startDate: period === 'custom' ? startDate.toISOString() : undefined,
         endDate: period === 'custom' ? endDate.toISOString() : undefined,
-        // Scoped supervisor: locationFilter narrows by training location.
-        // All-site supervisor: locationFilter narrows the roster by home site.
-        workSite: isScopedSupervisor && locationFilter !== 'all' ? locationFilter : undefined,
-        homeSite: !isScopedSupervisor && locationFilter !== 'all' ? locationFilter : undefined,
+        // Scoped supervisor: locationFilters narrows by training location(s).
+        // All-site supervisor: locationFilters narrows the roster by home site(s).
+        workSite: isScopedSupervisor && !isAllSites ? locationFilters.join(',') : undefined,
+        homeSite: !isScopedSupervisor && !isAllSites ? locationFilters.join(',') : undefined,
       };
 
       const response = await axios.get(`${BACKEND_URL}/api/dashboard/stats`, { params });
@@ -208,8 +227,8 @@ const ManagerDashboard = () => {
       // narrows by where training happened (scoped supervisor's use case);
       // `homeSite` narrows the roster itself (all-site supervisor's use case).
       const params = {
-        location: isScopedSupervisor && locationFilter !== 'all' ? locationFilter : undefined,
-        homeSite: !isScopedSupervisor && locationFilter !== 'all' ? locationFilter : undefined,
+        location: isScopedSupervisor && !isAllSites ? locationFilters.join(',') : undefined,
+        homeSite: !isScopedSupervisor && !isAllSites ? locationFilters.join(',') : undefined,
       };
       const response = await axios.get(`${BACKEND_URL}/api/checkin`, { params });
       setCheckIns(response.data || []);
@@ -255,12 +274,12 @@ const ManagerDashboard = () => {
     try {
       // /api/reports filters by check-in/session location, not home location —
       // only meaningful to pass workSite here for a scoped supervisor (whose
-      // locationFilter means training location); an all-site supervisor's
+      // locationFilters means training location); an all-site supervisor's
       // home-location filter doesn't map onto this endpoint, so this report
       // stays company-wide for them.
       const params = {
         workSite: isScopedSupervisor
-          ? (locationFilter !== 'all' ? locationFilter : allowedSites.join(','))
+          ? (!isAllSites ? locationFilters.join(',') : allowedSites.join(','))
           : undefined,
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
@@ -336,25 +355,81 @@ const ManagerDashboard = () => {
         {complianceData && (
           <Box sx={{ mb: 4 }}>
             {moment().date() >= 15 && complianceData.alerts.midMonth.length > 0 && (
-              <Alert 
-                severity="error" 
+              <Alert
+                severity="error"
                 icon={<ErrorIcon />}
-                sx={{ mb: 2, borderRadius: 2, fontWeight: 'bold' }}
+                sx={{ mb: 2, borderRadius: 2, fontWeight: 'bold', cursor: 'pointer' }}
+                onClick={() => setOpenAlert('midMonth')}
+                action={
+                  <Button color="inherit" size="small" onClick={() => setOpenAlert('midMonth')}>
+                    View List
+                  </Button>
+                }
               >
                 URGENT: {complianceData.alerts.midMonth.length} employees have 0 hours of inservice recorded as of the 15th.
               </Alert>
             )}
             {moment().date() < 15 && complianceData.alerts.needsNotice.length > 0 && (
-              <Alert 
-                severity="warning" 
+              <Alert
+                severity="warning"
                 icon={<WarningIcon />}
-                sx={{ mb: 2, borderRadius: 2 }}
+                sx={{ mb: 2, borderRadius: 2, cursor: 'pointer' }}
+                onClick={() => setOpenAlert('needsNotice')}
+                action={
+                  <Button color="inherit" size="small" onClick={() => setOpenAlert('needsNotice')}>
+                    View List
+                  </Button>
+                }
               >
                 Notice: {complianceData.alerts.needsNotice.length} employees are under the 2-hour requirement for the 15th.
               </Alert>
             )}
           </Box>
         )}
+
+        {/* Compliance alert employee list dialog */}
+        <Dialog open={Boolean(openAlert)} onClose={() => setOpenAlert(null)} maxWidth="sm" fullWidth>
+          <DialogTitle>
+            {openAlert === 'midMonth'
+              ? 'Employees with 0 hours recorded'
+              : 'Employees under the 2-hour requirement'}
+          </DialogTitle>
+          <DialogContent dividers>
+            {openAlert && (
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Name</TableCell>
+                    <TableCell>Location</TableCell>
+                    <TableCell align="right">Hours This Month</TableCell>
+                    <TableCell align="right">Needed by 15th</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {complianceData.alerts[openAlert].map((emp) => (
+                    <TableRow key={emp.id}>
+                      <TableCell>
+                        <Typography
+                          component="span"
+                          sx={{ cursor: 'pointer', textDecoration: 'underline', fontWeight: 600 }}
+                          onClick={() => router.push(`/manage-employees/${emp.id}`)}
+                        >
+                          {emp.name}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>{emp.location}</TableCell>
+                      <TableCell align="right">{(emp.hoursThisMonth || 0).toFixed(1)}</TableCell>
+                      <TableCell align="right">{(emp.hoursNeededByMidMonth || 0).toFixed(1)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOpenAlert(null)}>Close</Button>
+          </DialogActions>
+        </Dialog>
 
         {/* Filters */}
         <Paper sx={{ p: 3, mb: 4 }}>
@@ -365,13 +440,24 @@ const ManagerDashboard = () => {
             <FormControl fullWidth>
               <InputLabel>{locationFilterLabel}</InputLabel>
               <Select
-                value={locationFilter}
+                multiple
+                value={locationFilters}
                 label={locationFilterLabel}
-                onChange={(e) => setLocationFilter(e.target.value)}
+                onChange={handleLocationFilterChange}
+                renderValue={(selected) =>
+                  selected.includes('all')
+                    ? (isScopedSupervisor ? 'All (My Staff)' : 'All Sites')
+                    : selected.join(', ')
+                }
               >
-                {workSites.map((site) => (
+                <MenuItem value="all">
+                  <Checkbox checked={isAllSites} />
+                  <ListItemText primary={isScopedSupervisor ? 'All (My Staff)' : 'All Sites'} />
+                </MenuItem>
+                {allSites.map((site) => (
                   <MenuItem key={site} value={site}>
-                    {site === 'all' ? (isScopedSupervisor ? 'All (My Staff)' : 'All Sites') : site}
+                    <Checkbox checked={locationFilters.includes(site)} />
+                    <ListItemText primary={site} />
                   </MenuItem>
                 ))}
               </Select>
@@ -550,7 +636,7 @@ const ManagerDashboard = () => {
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <Paper sx={{ p: 3, textAlign: 'center' }}>
               <Typography variant="h6" gutterBottom>
-                Training Completed {locationFilter !== 'all' ? `(${locationFilter})` : ''}
+                Training Completed {!isAllSites ? `(${locationFilters.join(', ')})` : ''}
               </Typography>
               {loading ? (
                 <CircularProgress size={24} />
@@ -558,7 +644,7 @@ const ManagerDashboard = () => {
                 <Alert severity="error">{error}</Alert>
               ) : (
                 <Typography variant="h4">
-                  {locationFilter !== 'all' ? (stats?.trainingCompleted || 0) : (stats?.trainingCompletedAllSites || 0)}
+                  {!isAllSites ? (stats?.trainingCompleted || 0) : (stats?.trainingCompletedAllSites || 0)}
                 </Typography>
               )}
             </Paper>
@@ -585,7 +671,7 @@ const ManagerDashboard = () => {
         <Paper sx={{ p: 3, mb: 4 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6">
-              Employees Needing Training {locationFilter !== 'all' && !isScopedSupervisor ? `(${locationFilter})` : ''}
+              Employees Needing Training {!isAllSites && !isScopedSupervisor ? `(${locationFilters.join(', ')})` : ''}
             </Typography>
             <Button
               variant="outlined"
@@ -628,7 +714,15 @@ const ManagerDashboard = () => {
                             '&:hover': { bgcolor: getStatusColor(), opacity: 0.8 }
                           }}
                         >
-                          <TableCell>{emp.name}</TableCell>
+                          <TableCell>
+                            <Typography
+                              component="span"
+                              sx={{ cursor: 'pointer', textDecoration: 'underline', fontWeight: 600, color: 'inherit' }}
+                              onClick={() => router.push(`/manage-employees/${emp.id}`)}
+                            >
+                              {emp.name}
+                            </Typography>
+                          </TableCell>
                           <TableCell>{emp.location}</TableCell>
                           <TableCell align="right">{emp.hoursLeft ? emp.hoursLeft.toFixed(1) : '0.0'}</TableCell>
                           <TableCell>
@@ -655,14 +749,14 @@ const ManagerDashboard = () => {
           allowedLocations={
             isScopedSupervisor
               ? allowedSites
-              : (locationFilter !== 'all' ? [locationFilter] : null)
+              : (!isAllSites ? locationFilters : null)
           }
         />
 
         {/* Completed Trainings */}
         <Paper sx={{ p: 4, mt: 4 }}>
           <Typography variant="h5" gutterBottom>
-            Completed Trainings
+            Completed Trainings {!isAllSites ? `(${locationFilters.join(', ')})` : ''}
           </Typography>
           {loading ? (
             <CircularProgress />
@@ -690,7 +784,7 @@ const ManagerDashboard = () => {
         <Paper sx={{ p: 4, mt: 4 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h5" gutterBottom>
-              Recent Check-Ins {locationFilter !== 'all' ? `(${locationFilter})` : ''}
+              Recent Check-Ins {!isAllSites ? `(${locationFilters.join(', ')})` : ''}
             </Typography>
           </Box>
           <List>

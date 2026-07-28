@@ -36,6 +36,7 @@ import {
   CardContent,
   Stack,
   Autocomplete,
+  Link,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -44,6 +45,7 @@ import { Edit as EditIcon, Archive as ArchiveIcon, Unarchive as UnarchiveIcon, A
 import axios from 'axios';
 import moment from 'moment';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import ImportEmployeesDialog from './ImportEmployeesDialog';
 
 const CERTIFICATION_TYPE_SUGGESTIONS = [
@@ -60,6 +62,7 @@ const CERTIFICATION_TYPE_SUGGESTIONS = [
 ];
 
 const ManageEmployees = () => {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [openDialog, setOpenDialog] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
@@ -455,7 +458,15 @@ const ManageEmployees = () => {
                       onChange={() => handleSelectEmployee(employee.id)}
                     />
                   </TableCell>
-                  <TableCell>{employee.name}</TableCell>
+                  <TableCell>
+                    <Link
+                      component="button"
+                      onClick={() => router.push(`/manage-employees/${employee.id}`)}
+                      sx={{ textAlign: 'left' }}
+                    >
+                      {employee.name}
+                    </Link>
+                  </TableCell>
                   <TableCell>{employee.email}</TableCell>
                   <TableCell>{employee.position}</TableCell>
                   <TableCell>{employee.badgeNumber || '—'}</TableCell>

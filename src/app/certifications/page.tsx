@@ -29,21 +29,25 @@ import { useAuth } from '../../components/AuthContext';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
 
-type CertRow = {
-  employeeId: string;
-  employeeName: string;
-  homeLocation: string;
+type CertStatus = {
   type: string;
   expirationDate: string | null;
   daysUntil: number | null;
   status: 'no-record' | 'expired' | 'expiring' | 'ok';
 };
 
-const STATUS_CONFIG: Record<CertRow['status'], { label: (row: CertRow) => string; color: 'default' | 'error' | 'warning' | 'success' }> = {
+type EmployeeCertRow = {
+  employeeId: string;
+  employeeName: string;
+  homeLocation: string;
+  certs: CertStatus[];
+};
+
+const STATUS_CONFIG: Record<CertStatus['status'], { label: (cert: CertStatus) => string; color: 'default' | 'error' | 'warning' | 'success' }> = {
   'no-record': { label: () => 'No certification on file', color: 'default' },
-  expired: { label: (row) => `Expired ${moment(row.expirationDate).format('MM/DD/YYYY')}`, color: 'error' },
-  expiring: { label: (row) => `Expires ${moment(row.expirationDate).format('MM/DD/YYYY')} (${row.daysUntil}d)`, color: 'warning' },
-  ok: { label: (row) => `Expires ${moment(row.expirationDate).format('MM/DD/YYYY')}`, color: 'success' },
+  expired: { label: (cert) => `${cert.type}: Expired ${moment(cert.expirationDate).format('MM/DD/YYYY')}`, color: 'error' },
+  expiring: { label: (cert) => `${cert.type}: Expires ${moment(cert.expirationDate).format('MM/DD/YYYY')} (${cert.daysUntil}d)`, color: 'warning' },
+  ok: { label: (cert) => `${cert.type}: Expires ${moment(cert.expirationDate).format('MM/DD/YYYY')}`, color: 'success' },
 };
 
 export default function CertificationsPage() {
@@ -75,42 +79,42 @@ export default function CertificationsPage() {
     },
   });
 
-  const rows: CertRow[] = employees.flatMap((emp): CertRow[] => {
+  const employeeRows: EmployeeCertRow[] = employees.map((emp): EmployeeCertRow => {
     if (!emp.certifications || emp.certifications.length === 0) {
-      return [{
-        employeeId: emp.employeeId,
-        employeeName: emp.employeeName,
-        homeLocation: emp.homeLocation,
-        type: '—',
-        expirationDate: null,
-        daysUntil: null,
-        status: 'no-record',
-      }];
-    }
-    return emp.certifications.map((cert): CertRow => {
-      const daysUntil = moment(cert.expirationDate).startOf('day').diff(moment().startOf('day'), 'days');
-      const status: CertRow['status'] = daysUntil < 0 ? 'expired' : daysUntil <= 30 ? 'expiring' : 'ok';
       return {
         employeeId: emp.employeeId,
         employeeName: emp.employeeName,
         homeLocation: emp.homeLocation,
-        type: cert.type,
-        expirationDate: cert.expirationDate,
-        daysUntil,
-        status,
+        certs: [{ type: '—', expirationDate: null, daysUntil: null, status: 'no-record' }],
       };
-    });
+    }
+    return {
+      employeeId: emp.employeeId,
+      employeeName: emp.employeeName,
+      homeLocation: emp.homeLocation,
+      certs: emp.certifications.map((cert): CertStatus => {
+        const daysUntil = moment(cert.expirationDate).startOf('day').diff(moment().startOf('day'), 'days');
+        const status: CertStatus['status'] = daysUntil < 0 ? 'expired' : daysUntil <= 30 ? 'expiring' : 'ok';
+        return { type: cert.type, expirationDate: cert.expirationDate, daysUntil, status };
+      }),
+    };
   });
 
-  const filteredRows = rows.filter((row) => {
-    if (dayWindow === 'all') return true;
-    if (row.status === 'no-record' || row.status === 'expired') return true;
-    return row.daysUntil !== null && row.daysUntil <= dayWindow;
-  });
+  // Filter each employee's certifications to the selected window, then drop employees
+  // left with none — an employee stays listed once with only the relevant certs shown.
+  const filteredRows = employeeRows
+    .map((row) => ({
+      ...row,
+      certs: dayWindow === 'all'
+        ? row.certs
+        : row.certs.filter((cert) => cert.status === 'no-record' || cert.status === 'expired' || (cert.daysUntil !== null && cert.daysUntil <= dayWindow)),
+    }))
+    .filter((row) => row.certs.length > 0);
 
   const sortedRows = [...filteredRows].sort((a, b) => {
-    const key = (r: CertRow) => (r.status === 'no-record' ? -2 : r.status === 'expired' ? -1 : (r.daysUntil ?? 0));
-    return key(a) - key(b);
+    const key = (cert: CertStatus) => (cert.status === 'no-record' ? -2 : cert.status === 'expired' ? -1 : (cert.daysUntil ?? 0));
+    const rowKey = (row: EmployeeCertRow) => Math.min(...row.certs.map(key));
+    return rowKey(a) - rowKey(b);
   });
 
   return (
@@ -159,23 +163,26 @@ export default function CertificationsPage() {
                 <TableRow>
                   <TableCell>Employee</TableCell>
                   <TableCell>Home Location</TableCell>
-                  <TableCell>Certification</TableCell>
-                  <TableCell>Status</TableCell>
+                  <TableCell>Certifications</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {sortedRows.map((row, idx) => (
-                  <TableRow key={`${row.employeeId}-${idx}`}>
+                {sortedRows.map((row) => (
+                  <TableRow key={row.employeeId}>
                     <TableCell>{row.employeeName}</TableCell>
                     <TableCell>{row.homeLocation || '—'}</TableCell>
-                    <TableCell>{row.type}</TableCell>
                     <TableCell>
-                      <Chip
-                        size="small"
-                        label={STATUS_CONFIG[row.status].label(row)}
-                        color={STATUS_CONFIG[row.status].color}
-                        variant={row.status === 'no-record' ? 'outlined' : 'filled'}
-                      />
+                      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                        {row.certs.map((cert, idx) => (
+                          <Chip
+                            key={`${row.employeeId}-${idx}`}
+                            size="small"
+                            label={STATUS_CONFIG[cert.status].label(cert)}
+                            color={STATUS_CONFIG[cert.status].color}
+                            variant={cert.status === 'no-record' ? 'outlined' : 'filled'}
+                          />
+                        ))}
+                      </Box>
                     </TableCell>
                   </TableRow>
                 ))}

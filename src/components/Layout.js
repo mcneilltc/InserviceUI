@@ -13,11 +13,13 @@ import {
   ListItemText,
   ListItemButton,
   Toolbar,
+  Tooltip,
   Typography,
   useTheme,
   useMediaQuery,
   Divider,
 } from '@mui/material';
+import { useColorScheme } from '@mui/material/styles';
 import {
   Menu as MenuIcon,
   Dashboard as DashboardIcon,
@@ -30,6 +32,8 @@ import {
   Logout as LogoutIcon,
   VerifiedUser as VerifiedUserIcon,
   LocationOn as LocationOnIcon,
+  LightMode as LightModeIcon,
+  DarkMode as DarkModeIcon,
 } from '@mui/icons-material';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -55,6 +59,7 @@ const Layout = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const theme = useTheme();
+  const { mode, systemMode, setMode } = useColorScheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const pathname = usePathname();
   const { user, logout } = useAuth();
@@ -66,6 +71,11 @@ const Layout = ({ children }) => {
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
+  };
+
+  const resolvedMode = mode === 'system' ? systemMode : mode;
+  const handleToggleColorMode = () => {
+    setMode(resolvedMode === 'dark' ? 'light' : 'dark');
   };
 
   const drawer = (
@@ -123,6 +133,11 @@ const Layout = ({ children }) => {
             {menuItems.find(item => item.path === pathname)?.text || 'Training App'}
           </Typography>
           <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Tooltip title={resolvedMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+              <IconButton color="inherit" onClick={handleToggleColorMode} aria-label="toggle color mode">
+                {resolvedMode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
+              </IconButton>
+            </Tooltip>
             {user && (
               <>
                 <Typography variant="body2">

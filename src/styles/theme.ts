@@ -8,6 +8,9 @@ export const BRAND_GREEN = '#00EEC0';
 export const BRAND_GRADIENT = `linear-gradient(90deg, ${BRAND_BLUE}, ${BRAND_GREEN})`;
 
 const theme = createTheme({
+  cssVariables: {
+    colorSchemeSelector: 'class',
+  },
   colorSchemes: {
     light: {
       palette: {
