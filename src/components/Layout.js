@@ -34,6 +34,7 @@ import {
   LocationOn as LocationOnIcon,
   LightMode as LightModeIcon,
   DarkMode as DarkModeIcon,
+  Insights as InsightsIcon,
 } from '@mui/icons-material';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -48,6 +49,7 @@ const ALL_MENU_ITEMS = [
   { text: 'Add Training', icon: <AddIcon />, path: '/add-training', roles: ['supervisor', 'trainer'] },
   { text: 'Upload Sheet', icon: <CloudUploadIcon />, path: '/upload-inservice', roles: ['supervisor', 'trainer'] },
   { text: 'Certifications', icon: <VerifiedUserIcon />, path: '/certifications', roles: ['supervisor'] },
+  { text: 'Training Analytics', icon: <InsightsIcon />, path: '/training-analytics', roles: ['supervisor'] },
   { text: 'Manage Employees', icon: <PeopleIcon />, path: '/manage-employees', roles: ['supervisor'] },
   { text: 'Manage Topics', icon: <TopicIcon />, path: '/manage-topics', roles: ['supervisor'] },
   { text: 'Manage Sites', icon: <LocationOnIcon />, path: '/manage-sites', roles: ['supervisor'] },

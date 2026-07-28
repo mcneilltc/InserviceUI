@@ -925,6 +925,7 @@ const AddTraining = () => {
         >
           <Tab label="Active" />
           <Tab label="Completed" />
+          <Tab label="Cancelled" />
           <Tab label="Archived" />
         </Tabs>
 
@@ -932,10 +933,12 @@ const AddTraining = () => {
           {filteredSessions
             .filter((session) => {
               if (activeTab === 0)
-                return !session.archived && session.status !== "completed";
+                return !session.archived && session.status !== "completed" && session.status !== "cancelled";
               if (activeTab === 1)
                 return !session.archived && session.status === "completed";
-              if (activeTab === 2) return session.archived;
+              if (activeTab === 2)
+                return !session.archived && session.status === "cancelled";
+              if (activeTab === 3) return session.archived;
               return true;
             })
             .map((session, index) => (

@@ -10,6 +10,7 @@ const ROUTE_PERMISSIONS = [
   { prefix: '/manager-dashboard', roles: ['supervisor'] },
   { prefix: '/trainer-dashboard', roles: ['trainer'] },
   { prefix: '/certifications', roles: ['supervisor'] },
+  { prefix: '/training-analytics', roles: ['supervisor'] },
   { prefix: '/manage-employees', roles: ['supervisor'] },
   { prefix: '/manage-topics', roles: ['supervisor'] },
   { prefix: '/manage-sites', roles: ['supervisor'] },
