@@ -88,6 +88,10 @@ export default function UploadInservicePage() {
   // The editable review form
   const [form, setForm] = useState<FormState | null>(null);
 
+  // Persisted copies of the uploaded sheet photos (Cloud Storage URLs),
+  // returned by OCR extraction — carried through to the saved session.
+  const [sheetImageUrls, setSheetImageUrls] = useState<string[]>([]);
+
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
   // ---------------------------------------------------------------------------
@@ -101,6 +105,7 @@ export default function UploadInservicePage() {
     setExtractError(null);
     setSaved(false);
     setSaveErrors([]);
+    setSheetImageUrls([]);
   }, []);
 
   const removePage = (index: number) => {
@@ -130,6 +135,7 @@ export default function UploadInservicePage() {
       });
 
       setLookups(data.lookups);
+      setSheetImageUrls(Array.isArray(data.sheetImageUrls) ? data.sheetImageUrls : []);
 
       const { extracted, matched } = data;
 
@@ -301,34 +307,36 @@ export default function UploadInservicePage() {
       }
     }
 
-    const trainerNames = form.trainers
-      .map(id => lookups?.trainers.find(t => t.id === id)?.name || id)
-      .join(', ');
-
-    for (const emp of confirmedEmployees) {
-      try {
-        await axios.post(`${BACKEND_URL}/api/training-sessions/employee/${emp.matchedId}`, {
-          date: form.date,
-          location: form.location,
-          startTime: form.startTime || null,
-          length: parseFloat(form.length) || 1,
-          topics: resolvedTopics,
-          trainer: trainerNames,
-          trainees: confirmedEmployees.map(e => e.matchedId),
-          status: 'completed',
-        });
-      } catch (err: any) {
-        errors.push(`Failed to save session for ${emp.matchedName || emp.extractedName}: ${err.response?.data?.error?.message || err.message}`);
-      }
+    // One shared session (trainer = employee IDs, like Add Training), closed
+    // out immediately using the sheet's own recorded times — reuses the same
+    // crediting code a live session's close-out uses, so this shows up in the
+    // same Training Sessions list and credits hours the same way.
+    try {
+      await axios.post(`${BACKEND_URL}/api/sessions/from-sheet`, {
+        date: form.date,
+        location: form.location,
+        startTime: form.startTime || null,
+        endTime: form.endTime || null,
+        length: parseFloat(form.length) || 1,
+        topics: resolvedTopics,
+        trainer: form.trainers,
+        trainees: confirmedEmployees.map(e => ({
+          employeeId: e.matchedId,
+          name: e.matchedName,
+        })),
+        sheetImageUrls,
+      });
+    } catch (err: any) {
+      errors.push(err.response?.data?.error?.message || err.message || 'Failed to save session');
     }
 
     setSaving(false);
     setSaveErrors(errors);
     if (errors.length === 0) {
       setSaved(true);
-      setSnackbar({ open: true, message: `Saved ${confirmedEmployees.length} training session(s) successfully!`, severity: 'success' });
+      setSnackbar({ open: true, message: `Saved training session for ${confirmedEmployees.length} employee(s) successfully!`, severity: 'success' });
     } else {
-      setSnackbar({ open: true, message: `Saved with ${errors.length} error(s)`, severity: 'error' });
+      setSnackbar({ open: true, message: `Save failed: ${errors[0]}`, severity: 'error' });
     }
   };
 

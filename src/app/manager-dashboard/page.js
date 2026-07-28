@@ -43,7 +43,6 @@ import { Chart as ChartJS, ArcElement, Tooltip as ChartTooltip, Legend } from 'c
 import { Doughnut } from 'react-chartjs-2';
 import EmployeeHoursTracker from '../../components/EmployeeHoursTracker';
 import { useAuth } from '../../components/AuthContext';
-import { SITES as ALL_SITES } from '../../constants/sites';
 
 ChartJS.register(ArcElement, ChartTooltip, Legend);
 
@@ -52,7 +51,15 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost
 const ManagerDashboard = () => {
   const { user } = useAuth();
   const isScopedSupervisor = user?.role === 'supervisor' && user?.supervisorScope === 'locations';
-  const allowedSites = isScopedSupervisor && user.supervisorLocations?.length ? user.supervisorLocations : ALL_SITES;
+
+  const [allSites, setAllSites] = useState([]);
+  useEffect(() => {
+    axios.get(`${BACKEND_URL}/api/sites`)
+      .then((res) => setAllSites(res.data.map((s) => s.name)))
+      .catch((err) => console.error('Failed to load sites:', err));
+  }, []);
+
+  const allowedSites = isScopedSupervisor && user.supervisorLocations?.length ? user.supervisorLocations : allSites;
 
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -78,7 +85,7 @@ const ManagerDashboard = () => {
   const [endDate, setEndDate] = useState(moment().endOf('month'));
   const [showEmployeesNeedingTraining, setShowEmployeesNeedingTraining] = useState(false);
 
-  const workSites = ['all', ...ALL_SITES];
+  const workSites = ['all', ...allSites];
   // Roster/home-location scoping — the security-relevant check, always
   // enforced for a scoped supervisor regardless of what locationFilter means
   // for them right now.

@@ -58,7 +58,6 @@ import axios from "axios";
 import moment from "moment";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../components/AuthContext";
-import { SITES } from "../../constants/sites";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
 import { QRCodeCanvas } from "qrcode.react";
@@ -78,7 +77,13 @@ const AddTraining = () => {
   });
 
   // Data from API
-  const [locations, setLocations] = useState(SITES);
+  const { data: locations = [] as any[] } = useQuery({
+    queryKey: ['sites'],
+    queryFn: async () => {
+      const { data } = await axios.get(`${BACKEND_URL}/api/sites`);
+      return data.map((s: any) => s.name);
+    }
+  });
 
   // Modal state
   const [openNewTopicModal, setOpenNewTopicModal] = useState(false);
@@ -259,7 +264,10 @@ const AddTraining = () => {
       date: moment(formData.date).format('YYYY-MM-DD'),
       location: formData.location,
       startTime: formData.startTime || undefined,
-      length: parseInt(formData.length),
+      // Form collects minutes; every other producer of `length` (close-out,
+      // Upload Sheet) stores hours, so convert here to keep the field
+      // unit-consistent wherever it's later read as hours.
+      length: Math.round((parseInt(formData.length, 10) / 60) * 100) / 100,
       topics: resolvedTopics,
       trainer: formData.trainer,
       trainees: []
@@ -449,10 +457,10 @@ const AddTraining = () => {
 
   const handleCancelTraining = async (sessionId) => {
     try {
-      // In production, uncomment this API call:
-      // await axios.put(`/api/training-sessions/${sessionId}`, {
-      //   status: 'cancelled',
-      // });
+      await axios.put(`${BACKEND_URL}/api/sessions/${sessionId}`, {
+        status: 'cancelled',
+      });
+      queryClient.invalidateQueries({ queryKey: ['sessions'] });
 
       setSnackbar({
         open: true,
@@ -471,10 +479,10 @@ const AddTraining = () => {
 
   const handleArchiveTraining = async (sessionId) => {
     try {
-      // In production, uncomment this API call:
-      // await axios.put(`/api/training-sessions/${sessionId}`, {
-      //   archived: true,
-      // });
+      await axios.put(`${BACKEND_URL}/api/sessions/${sessionId}`, {
+        archived: true,
+      });
+      queryClient.invalidateQueries({ queryKey: ['sessions'] });
 
       setSnackbar({
         open: true,

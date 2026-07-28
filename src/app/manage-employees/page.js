@@ -45,7 +45,6 @@ import axios from 'axios';
 import moment from 'moment';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ImportEmployeesDialog from './ImportEmployeesDialog';
-import { SITES as LOCATIONS } from '../../constants/sites';
 
 const CERTIFICATION_TYPE_SUGGESTIONS = [
   'Lifeguarding',
@@ -96,6 +95,14 @@ const ManageEmployees = () => {
     }
   });
   const error = queryError ? 'Failed to fetch employees' : null;
+
+  const { data: LOCATIONS = [] } = useQuery({
+    queryKey: ['sites'],
+    queryFn: async () => {
+      const response = await axios.get('/api/sites');
+      return response.data.map(s => s.name);
+    }
+  });
 
   const handleError = (err, defaultMessage) => {
     console.error(err);

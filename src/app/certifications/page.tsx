@@ -26,7 +26,6 @@ import axios from 'axios';
 import moment from 'moment';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../components/AuthContext';
-import { SITES } from '../../constants/sites';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
 
@@ -50,6 +49,15 @@ const STATUS_CONFIG: Record<CertRow['status'], { label: (row: CertRow) => string
 export default function CertificationsPage() {
   const { user } = useAuth();
   const isScopedSupervisor = user?.role === 'supervisor' && user?.supervisorScope === 'locations';
+
+  const { data: SITES = [] } = useQuery({
+    queryKey: ['sites'],
+    queryFn: async () => {
+      const { data } = await axios.get(`${BACKEND_URL}/api/sites`);
+      return data.map((s: any) => s.name);
+    }
+  });
+
   const allowedSites = isScopedSupervisor && user.supervisorLocations?.length ? user.supervisorLocations : SITES;
 
   const [siteFilter, setSiteFilter] = useState('all');

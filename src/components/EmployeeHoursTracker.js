@@ -18,18 +18,24 @@ import {
   Chip,
 } from '@mui/material';
 import axios from 'axios';
-import { SITES } from '../constants/sites';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
 
 const EmployeeHoursTracker = ({ allowedLocations } = {}) => {
   const [employees, setEmployees] = useState([]);
-  const [locations] = useState(allowedLocations && allowedLocations.length ? allowedLocations : SITES);
+  const [allSites, setAllSites] = useState([]);
+  const locations = allowedLocations && allowedLocations.length ? allowedLocations : allSites;
   const [selectedLocation, setSelectedLocation] = useState('all');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     fetchEmployees();
+    if (!allowedLocations || allowedLocations.length === 0) {
+      axios.get(`${BACKEND_URL}/api/sites`)
+        .then((res) => setAllSites(res.data.map((s) => s.name)))
+        .catch((err) => console.error('Failed to load sites:', err));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchEmployees = async () => {

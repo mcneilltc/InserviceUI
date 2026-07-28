@@ -53,7 +53,17 @@ export default function EmployeePortal() {
         setLoading(false);
         return;
       }
-      try { sessionStorage.setItem('employeeSelfData', JSON.stringify(data)); } catch (_) {}
+      try {
+        sessionStorage.setItem('employeeSelfData', JSON.stringify(data));
+        // Persisted separately (and longer-lived) so the dashboard can
+        // silently re-fetch fresh data after the tab closes, instead of
+        // just dead-ending once the sessionStorage snapshot is gone.
+        localStorage.setItem('employeeLookupCredentials', JSON.stringify({
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          badgeNumber: badgeNumber.trim(),
+        }));
+      } catch (_) {}
       router.push('/employee/dashboard');
     } catch {
       setError('Unable to connect. Please try again.');

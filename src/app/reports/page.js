@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Container,
   Paper,
@@ -26,7 +26,6 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterMoment } from '@mui/x-date-pickers/AdapterMoment';
 import axios from 'axios';
 import moment from 'moment';
-import { SITES as LOCATIONS } from '../../constants/sites';
 
 const Reports = () => {
   // State for filters — these match what routes/reports.ts actually supports
@@ -37,6 +36,13 @@ const Reports = () => {
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState([]);
   const [error, setError] = useState('');
+  const [LOCATIONS, setLOCATIONS] = useState([]);
+
+  useEffect(() => {
+    axios.get('/api/sites')
+      .then((res) => setLOCATIONS(res.data.map((s) => s.name)))
+      .catch((err) => console.error('Failed to load sites:', err));
+  }, []);
 
   // Fetch report data based on selected criteria
   const fetchReportData = async () => {
