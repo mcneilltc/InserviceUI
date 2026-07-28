@@ -31,29 +31,55 @@ import {
   Snackbar,
   Chip,
   Checkbox,
+  FormControlLabel,
   Card,
   CardContent,
   Stack,
+  Autocomplete,
+  Link,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { Edit as EditIcon, Archive as ArchiveIcon, Add as AddIcon, LocationOn as LocationIcon } from '@mui/icons-material';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterMoment } from '@mui/x-date-pickers/AdapterMoment';
+import { Edit as EditIcon, Archive as ArchiveIcon, Unarchive as UnarchiveIcon, Add as AddIcon, LocationOn as LocationIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import axios from 'axios';
 import moment from 'moment';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
+import ImportEmployeesDialog from './ImportEmployeesDialog';
 
-const LOCATIONS = ['MCAC', 'Ramsey Creek Beach', 'Double Oaks', 'Cordelia'];
+const CERTIFICATION_TYPE_SUGGESTIONS = [
+  'Lifeguarding',
+  'Lifeguard Instructor',
+  'CPR/AED for the Professional Rescuer',
+  'First Aid',
+  'Waterfront Lifeguarding',
+  'Waterpark Lifeguarding',
+  'Title 22',
+  'Elite Supervisor Training',
+  'Swim Instructor Training',
+  'Slide Certification',
+];
 
 const ManageEmployees = () => {
-  const [employees, setEmployees] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const router = useRouter();
+  const queryClient = useQueryClient();
   const [openDialog, setOpenDialog] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    alternateEmails: '',
     position: '',
+    phone: '',
     hireDate: moment(),
     locations: [],
+    homeLocation: '',
+    certifications: [],
+    badgeNumber: '',
+    isSupervisor: false,
+    supervisorScope: 'locations',
+    isTrainer: false,
   });
   const [activeTab, setActiveTab] = useState(0);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
@@ -61,42 +87,109 @@ const ManageEmployees = () => {
   const [selectedLocation, setSelectedLocation] = useState('');
   const [openBulkDialog, setOpenBulkDialog] = useState(false);
   const [bulkLocations, setBulkLocations] = useState([]);
+  const [openImportDialog, setOpenImportDialog] = useState(false);
 
-  useEffect(() => {
-    fetchEmployees();
-  }, [activeTab]);
-
-  const fetchEmployees = async () => {
-    try {
+  const { data: employees = [], isLoading: loading, error: queryError } = useQuery({
+    queryKey: ['employees'],
+    queryFn: async () => {
       const response = await axios.get('/api/employees');
-      setEmployees(response.data);
-      setError(null);
-    } catch (error) {
-      console.error('Error fetching employees:', error);
-      setError('Failed to fetch employees');
-    } finally {
-      setLoading(false);
+      // For some reason some employees might have been recorded wrong, safeguard UI
+      return response.data.map(emp => ({ ...emp, locations: emp.locations || [] }));
     }
+  });
+  const error = queryError ? 'Failed to fetch employees' : null;
+
+  const { data: LOCATIONS = [] } = useQuery({
+    queryKey: ['sites'],
+    queryFn: async () => {
+      const response = await axios.get('/api/sites');
+      return response.data.map(s => s.name);
+    }
+  });
+
+  const handleError = (err, defaultMessage) => {
+    console.error(err);
+    setSnackbar({
+      open: true,
+      message: err.response?.data?.error?.message || defaultMessage,
+      severity: 'error',
+    });
   };
+
+  const createMutation = useMutation({
+    mutationFn: (newEmployee) => axios.post('/api/employees', newEmployee),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      setSnackbar({ open: true, message: 'Employee added successfully', severity: 'success' });
+      handleCloseDialog();
+    },
+    onError: (err) => handleError(err, 'Failed to add employee')
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (data) => axios.put(`/api/employees/${data.id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      setSnackbar({ open: true, message: 'Employee updated successfully', severity: 'success' });
+      handleCloseDialog();
+    },
+    onError: (err) => handleError(err, 'Failed to update employee')
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => axios.delete(`/api/employees/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      setSnackbar({ open: true, message: 'Employee archived successfully', severity: 'success' });
+    },
+    onError: (err) => handleError(err, 'Failed to archive employee')
+  });
+
+  const bulkUpdateMutation = useMutation({
+    mutationFn: (promises) => Promise.all(promises),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      setSnackbar({ open: true, message: 'Locations assigned successfully', severity: 'success' });
+      setOpenBulkDialog(false);
+      setSelectedEmployees([]);
+      setBulkLocations([]);
+    },
+    onError: (err) => handleError(err, 'Failed to assign locations')
+  });
 
   const handleOpenDialog = (employee = null) => {
     if (employee) {
       setEditingEmployee(employee);
       setFormData({
-        name: employee.name,
-        email: employee.email,
-        position: employee.position,
+        name: employee.name || '',
+        email: employee.email || '',
+        alternateEmails: (employee.alternateEmails || []).join(', '),
+        position: employee.position || '',
+        phone: employee.phone || '',
         hireDate: moment(employee.hireDate),
         locations: employee.locations || [],
+        homeLocation: employee.homeLocation || (employee.locations && employee.locations[0]) || '',
+        certifications: (employee.certifications || []).map((c) => ({ ...c, expirationDate: moment(c.expirationDate) })),
+        badgeNumber: employee.badgeNumber || '',
+        isSupervisor: employee.isSupervisor || false,
+        supervisorScope: employee.supervisorScope || 'locations',
+        isTrainer: employee.isTrainer || false,
       });
     } else {
       setEditingEmployee(null);
       setFormData({
         name: '',
         email: '',
+        alternateEmails: '',
         position: '',
         hireDate: moment(),
         locations: [],
+        homeLocation: '',
+        certifications: [],
+        badgeNumber: '',
+        isSupervisor: false,
+        supervisorScope: 'locations',
+        isTrainer: false,
       });
     }
     setOpenDialog(true);
@@ -108,63 +201,70 @@ const ManageEmployees = () => {
     setFormData({
       name: '',
       email: '',
+      alternateEmails: '',
       position: '',
       hireDate: moment(),
       locations: [],
+      homeLocation: '',
+      certifications: [],
+      badgeNumber: '',
+      isSupervisor: false,
+      supervisorScope: 'locations',
+      isTrainer: false,
     });
   };
 
-  const handleSubmit = async () => {
-    try {
-      if (editingEmployee) {
-        await axios.put('/api/employees', {
-          id: editingEmployee.id,
-          ...formData,
-        });
-        setSnackbar({
-          open: true,
-          message: 'Employee updated successfully',
-          severity: 'success',
-        });
-      } else {
-        await axios.post('/api/employees', formData);
-        setSnackbar({
-          open: true,
-          message: 'Employee added successfully',
-          severity: 'success',
-        });
-      }
-      handleCloseDialog();
-      fetchEmployees();
-    } catch (error) {
-      console.error('Error saving employee:', error);
-      setSnackbar({
-        open: true,
-        message: error.response?.data?.error || 'Failed to save employee',
-        severity: 'error',
+  const handleAddCertification = () => {
+    setFormData((prev) => ({
+      ...prev,
+      certifications: [...prev.certifications, { type: '', expirationDate: moment() }],
+    }));
+  };
+
+  const handleCertificationChange = (index, field, value) => {
+    setFormData((prev) => {
+      const certifications = [...prev.certifications];
+      certifications[index] = { ...certifications[index], [field]: value };
+      return { ...prev, certifications };
+    });
+  };
+
+  const handleRemoveCertification = (index) => {
+    setFormData((prev) => ({
+      ...prev,
+      certifications: prev.certifications.filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleSubmit = () => {
+    const payload = {
+      ...formData,
+      alternateEmails: formData.alternateEmails
+        .split(',')
+        .map((e) => e.trim())
+        .filter(Boolean),
+      certifications: formData.certifications
+        .filter((c) => c.type && c.expirationDate)
+        .map((c) => ({ type: c.type, expirationDate: moment(c.expirationDate).format('YYYY-MM-DD') })),
+    };
+    if (editingEmployee) {
+      updateMutation.mutate({
+        id: editingEmployee.id,
+        ...payload,
       });
+    } else {
+      createMutation.mutate(payload);
     }
   };
 
-  const handleArchive = async (employee) => {
+  const handleArchive = (employee) => {
     if (window.confirm('Are you sure you want to archive this employee?')) {
-      try {
-        await axios.delete(`/api/employees?id=${employee.id}`);
-        setSnackbar({
-          open: true,
-          message: 'Employee archived successfully',
-          severity: 'success',
-        });
-        fetchEmployees();
-      } catch (error) {
-        console.error('Error archiving employee:', error);
-        setSnackbar({
-          open: true,
-          message: 'Failed to archive employee',
-          severity: 'error',
-        });
-      }
+      deleteMutation.mutate(employee.id);
     }
+  };
+
+  const handleUnarchive = (employee) => {
+    updateMutation.mutate({ id: employee.id, isActive: true });
   };
 
   const handleTabChange = (event, newValue) => {
@@ -199,34 +299,11 @@ const ManageEmployees = () => {
     setBulkLocations(event.target.value);
   };
 
-  const handleBulkAssignLocations = async () => {
-    try {
-      const promises = selectedEmployees.map(employeeId => {
-        const employee = employees.find(emp => emp.id === employeeId);
-        return axios.put('/api/employees', {
-          id: employeeId,
-          locations: bulkLocations,
-        });
-      });
-
-      await Promise.all(promises);
-      setSnackbar({
-        open: true,
-        message: 'Locations assigned successfully',
-        severity: 'success',
-      });
-      setOpenBulkDialog(false);
-      setSelectedEmployees([]);
-      setBulkLocations([]);
-      fetchEmployees();
-    } catch (error) {
-      console.error('Error assigning locations:', error);
-      setSnackbar({
-        open: true,
-        message: 'Failed to assign locations',
-        severity: 'error',
-      });
-    }
+  const handleBulkAssignLocations = () => {
+    const promises = selectedEmployees.map(employeeId => 
+      axios.put(`/api/employees/${employeeId}`, { locations: bulkLocations })
+    );
+    bulkUpdateMutation.mutate(promises);
   };
 
   const getLocationSummary = () => {
@@ -263,6 +340,14 @@ const ManageEmployees = () => {
           <Typography variant="h4" component="h1">
             Manage Employees
           </Typography>
+          <Button
+            variant="outlined"
+            startIcon={<AddIcon />}
+            onClick={() => setOpenImportDialog(true)}
+            sx={{ mr: 1 }}
+          >
+            Import from Excel
+          </Button>
           <Button
             variant="contained"
             startIcon={<AddIcon />}
@@ -356,9 +441,12 @@ const ManageEmployees = () => {
                 <TableCell>Name</TableCell>
                 <TableCell>Email</TableCell>
                 <TableCell>Position</TableCell>
+                <TableCell>Badge #</TableCell>
+                <TableCell>Home Location</TableCell>
                 <TableCell>Locations</TableCell>
+                <TableCell>Role</TableCell>
                 <TableCell>Hire Date</TableCell>
-                {activeTab === 0 && <TableCell>Actions</TableCell>}
+                <TableCell>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -370,9 +458,19 @@ const ManageEmployees = () => {
                       onChange={() => handleSelectEmployee(employee.id)}
                     />
                   </TableCell>
-                  <TableCell>{employee.name}</TableCell>
+                  <TableCell>
+                    <Link
+                      component="button"
+                      onClick={() => router.push(`/manage-employees/${employee.id}`)}
+                      sx={{ textAlign: 'left' }}
+                    >
+                      {employee.name}
+                    </Link>
+                  </TableCell>
                   <TableCell>{employee.email}</TableCell>
                   <TableCell>{employee.position}</TableCell>
+                  <TableCell>{employee.badgeNumber || '—'}</TableCell>
+                  <TableCell>{employee.homeLocation || '—'}</TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
                       {(employee.locations || []).map((location) => (
@@ -386,17 +484,38 @@ const ManageEmployees = () => {
                       ))}
                     </Box>
                   </TableCell>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                      {employee.isSupervisor && (
+                        <Chip
+                          label={employee.supervisorScope === 'all' ? 'Supervisor (all sites)' : 'Supervisor'}
+                          size="small"
+                          color="secondary"
+                        />
+                      )}
+                      {employee.isTrainer && (
+                        <Chip label="Trainer" size="small" color="info" />
+                      )}
+                      {!employee.isSupervisor && !employee.isTrainer && '—'}
+                    </Box>
+                  </TableCell>
                   <TableCell>{moment(employee.hireDate).format('MMM D, YYYY')}</TableCell>
-                  {activeTab === 0 && (
-                    <TableCell>
-                      <IconButton onClick={() => handleOpenDialog(employee)}>
-                        <EditIcon />
+                  <TableCell>
+                    {activeTab === 0 ? (
+                      <>
+                        <IconButton onClick={() => handleOpenDialog(employee)}>
+                          <EditIcon />
+                        </IconButton>
+                        <IconButton onClick={() => handleArchive(employee)}>
+                          <ArchiveIcon />
+                        </IconButton>
+                      </>
+                    ) : (
+                      <IconButton onClick={() => handleUnarchive(employee)} title="Unarchive">
+                        <UnarchiveIcon />
                       </IconButton>
-                      <IconButton onClick={() => handleArchive(employee)}>
-                        <ArchiveIcon />
-                      </IconButton>
-                    </TableCell>
-                  )}
+                    )}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -409,8 +528,9 @@ const ManageEmployees = () => {
             {editingEmployee ? 'Edit Employee' : 'Add New Employee'}
           </DialogTitle>
           <DialogContent>
+            <LocalizationProvider dateAdapter={AdapterMoment}>
             <Grid container spacing={2} sx={{ mt: 1 }}>
-              <Grid item xs={12}>
+              <Grid size={12}>
                 <TextField
                   fullWidth
                   label="Name"
@@ -419,7 +539,7 @@ const ManageEmployees = () => {
                   required
                 />
               </Grid>
-              <Grid item xs={12}>
+              <Grid size={12}>
                 <TextField
                   fullWidth
                   label="Email"
@@ -429,7 +549,7 @@ const ManageEmployees = () => {
                   required
                 />
               </Grid>
-              <Grid item xs={12}>
+              <Grid size={12}>
                 <TextField
                   fullWidth
                   label="Position"
@@ -438,7 +558,24 @@ const ManageEmployees = () => {
                   required
                 />
               </Grid>
-              <Grid item xs={12}>
+              <Grid size={12}>
+                <TextField
+                  fullWidth
+                  label="Phone"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                />
+              </Grid>
+              <Grid size={12}>
+                <TextField
+                  fullWidth
+                  label="Badge Number"
+                  value={formData.badgeNumber}
+                  onChange={(e) => setFormData({ ...formData, badgeNumber: e.target.value })}
+                  helperText="Used by employees to look themselves up on the self check-in page"
+                />
+              </Grid>
+              <Grid size={12}>
                 <FormControl fullWidth required>
                   <InputLabel>Locations</InputLabel>
                   <Select
@@ -462,7 +599,57 @@ const ManageEmployees = () => {
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12}>
+              <Grid size={12}>
+                <FormControl fullWidth required>
+                  <InputLabel>Home Location</InputLabel>
+                  <Select
+                    value={formData.homeLocation}
+                    onChange={(e) => setFormData({ ...formData, homeLocation: e.target.value })}
+                    label="Home Location"
+                  >
+                    {LOCATIONS.map((location) => (
+                      <MenuItem key={location} value={location}>
+                        {location}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid size={12}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  Certifications
+                </Typography>
+                <Stack spacing={1.5}>
+                  {formData.certifications.map((cert, index) => (
+                    <Box key={index} sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                      <Autocomplete
+                        freeSolo
+                        fullWidth
+                        options={CERTIFICATION_TYPE_SUGGESTIONS}
+                        value={cert.type}
+                        onInputChange={(e, value) => handleCertificationChange(index, 'type', value)}
+                        renderInput={(params) => (
+                          <TextField {...params} label="Certification Type" size="small" />
+                        )}
+                        sx={{ flex: 2 }}
+                      />
+                      <DatePicker
+                        label="Expiration Date"
+                        value={cert.expirationDate}
+                        onChange={(newValue) => handleCertificationChange(index, 'expirationDate', newValue)}
+                        slotProps={{ textField: { size: 'small', sx: { flex: 1 } } }}
+                      />
+                      <IconButton onClick={() => handleRemoveCertification(index)} size="small">
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  ))}
+                  <Button startIcon={<AddIcon />} onClick={handleAddCertification} size="small" sx={{ alignSelf: 'flex-start' }}>
+                    Add Certification
+                  </Button>
+                </Stack>
+              </Grid>
+              <Grid size={12}>
                 <DatePicker
                   label="Hire Date"
                   value={formData.hireDate}
@@ -470,7 +657,56 @@ const ManageEmployees = () => {
                   slotProps={{ textField: { fullWidth: true, required: true } }}
                 />
               </Grid>
+              <Grid size={12}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={formData.isSupervisor}
+                      onChange={(e) => setFormData({ ...formData, isSupervisor: e.target.checked })}
+                    />
+                  }
+                  label="This employee is a supervisor (gets dashboard access to track training hours)"
+                />
+              </Grid>
+              {formData.isSupervisor && (
+                <Grid size={12}>
+                  <FormControl fullWidth>
+                    <InputLabel>Supervisor Scope</InputLabel>
+                    <Select
+                      value={formData.supervisorScope}
+                      label="Supervisor Scope"
+                      onChange={(e) => setFormData({ ...formData, supervisorScope: e.target.value })}
+                    >
+                      <MenuItem value="locations">Their assigned location(s) only</MenuItem>
+                      <MenuItem value="all">All locations (company-wide)</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+              )}
+              <Grid size={12}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={formData.isTrainer}
+                      onChange={(e) => setFormData({ ...formData, isTrainer: e.target.checked })}
+                    />
+                  }
+                  label="This employee is a trainer (can lead training sessions, gets the trainer dashboard)"
+                />
+              </Grid>
+              {(formData.isSupervisor || formData.isTrainer) && (
+                <Grid size={12}>
+                  <TextField
+                    fullWidth
+                    label="Alternate Login Emails"
+                    value={formData.alternateEmails}
+                    onChange={(e) => setFormData({ ...formData, alternateEmails: e.target.value })}
+                    helperText="Comma-separated. Use this if they sign in with more than one email (e.g. personal Google + work Microsoft account)."
+                  />
+                </Grid>
+              )}
             </Grid>
+            </LocalizationProvider>
           </DialogContent>
           <DialogActions>
             <Button onClick={handleCloseDialog}>Cancel</Button>
@@ -531,6 +767,12 @@ const ManageEmployees = () => {
           </Alert>
         </Snackbar>
       </Paper>
+
+      <ImportEmployeesDialog
+        open={openImportDialog}
+        onClose={() => setOpenImportDialog(false)}
+        onImportComplete={() => queryClient.invalidateQueries({ queryKey: ['employees'] })}
+      />
     </Container>
   );
 };

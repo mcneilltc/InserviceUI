@@ -54,11 +54,13 @@ const EmployeeHours = () => {
     if (employeeId) {
       fetchSessions();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employeeId]);
 
   // Apply filters when sessions or filters change
   useEffect(() => {
     applyFilters();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessions, filters]);
 
   const fetchSessions = async () => {
@@ -118,7 +120,7 @@ const EmployeeHours = () => {
         const duration = end.diff(start, 'hours', true);
         return [
           session.date,
-          `"${session.topic}"`,
+          `"${(session.topics || (session.topic ? [session.topic] : [])).join('; ')}"`,
           session.startTime,
           session.endTime,
           duration,
@@ -143,7 +145,7 @@ const EmployeeHours = () => {
   // Convert training sessions to calendar events
   const events = filteredSessions.map((session) => ({
     id: session.id,
-    title: session.topic,
+    title: (session.topics || (session.topic ? [session.topic] : [])).join(', '),
     start: new Date(`${session.date}T${session.startTime}`),
     end: new Date(`${session.date}T${session.endTime}`),
     resource: session,
@@ -215,7 +217,7 @@ const EmployeeHours = () => {
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Typography variant="h6">Summary</Typography>
                 <Typography variant="body1">
                   Total Training Hours: {calculateTotalHours().toFixed(1)} hours
@@ -224,7 +226,7 @@ const EmployeeHours = () => {
                   Total Sessions: {filteredSessions.length}
                 </Typography>
               </Grid>
-              <Grid item xs={12} md={6} sx={{ textAlign: 'right' }}>
+              <Grid size={{ xs: 12, md: 6 }} sx={{ textAlign: 'right' }}>
                 <Button
                   variant="contained"
                   startIcon={<FileDownloadIcon />}
@@ -239,7 +241,7 @@ const EmployeeHours = () => {
 
         {/* Filters */}
         <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid item xs={12}>
+          <Grid size={12}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
               <Typography variant="h6">Filters</Typography>
               <Button
@@ -252,7 +254,7 @@ const EmployeeHours = () => {
               </Button>
             </Box>
           </Grid>
-          <Grid item xs={12} md={4}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <FormControl fullWidth>
               <InputLabel>Status</InputLabel>
               <Select
@@ -266,23 +268,23 @@ const EmployeeHours = () => {
               </Select>
             </FormControl>
           </Grid>
-          <Grid item xs={12} md={4}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <LocalizationProvider dateAdapter={AdapterMoment}>
               <DatePicker
                 label="Start Date"
                 value={filters.startDate}
                 onChange={(newValue) => setFilters({ ...filters, startDate: newValue })}
-                renderInput={(params) => <TextField {...params} fullWidth />}
+                slotProps={{ textField: { fullWidth: true } }}
               />
             </LocalizationProvider>
           </Grid>
-          <Grid item xs={12} md={4}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <LocalizationProvider dateAdapter={AdapterMoment}>
               <DatePicker
                 label="End Date"
                 value={filters.endDate}
                 onChange={(newValue) => setFilters({ ...filters, endDate: newValue })}
-                renderInput={(params) => <TextField {...params} fullWidth />}
+                slotProps={{ textField: { fullWidth: true } }}
               />
             </LocalizationProvider>
           </Grid>
@@ -316,7 +318,7 @@ const EmployeeHours = () => {
             <DialogContent>
               <Box sx={{ mt: 2 }}>
                 <Typography variant="subtitle1" gutterBottom>
-                  <strong>Topic:</strong> {selectedSession.topic}
+                  <strong>Topics:</strong> {(selectedSession.topics || (selectedSession.topic ? [selectedSession.topic] : [])).join(', ')}
                 </Typography>
                 <Typography variant="subtitle1" gutterBottom>
                   <strong>Date:</strong> {moment(selectedSession.date).format('MMMM D, YYYY')}

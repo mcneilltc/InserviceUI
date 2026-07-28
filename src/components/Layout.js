@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import {
   AppBar,
   Box,
+  Button,
   Drawer,
   IconButton,
   List,
@@ -12,11 +13,13 @@ import {
   ListItemText,
   ListItemButton,
   Toolbar,
+  Tooltip,
   Typography,
   useTheme,
   useMediaQuery,
   Divider,
 } from '@mui/material';
+import { useColorScheme } from '@mui/material/styles';
 import {
   Menu as MenuIcon,
   Dashboard as DashboardIcon,
@@ -25,27 +28,44 @@ import {
   Topic as TopicIcon,
   Person as PersonIcon,
   Assessment as AssessmentIcon,
+  CloudUpload as CloudUploadIcon,
+  Logout as LogoutIcon,
+  VerifiedUser as VerifiedUserIcon,
+  LocationOn as LocationOnIcon,
+  LightMode as LightModeIcon,
+  DarkMode as DarkModeIcon,
+  Insights as InsightsIcon,
 } from '@mui/icons-material';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import GoogleAuth from '@/components/GoogleAuth';
+import { useAuth } from './AuthContext';
+import BrandLogo from './BrandLogo';
 
 const drawerWidth = 240;
 
-const menuItems = [
-  { text: 'Dashboard', icon: <DashboardIcon />, path: '/manager-dashboard' },
-  { text: 'Add Training', icon: <AddIcon />, path: '/add-training' },
-  { text: 'Manage Topics', icon: <TopicIcon />, path: '/manage-topics' },
-  { text: 'Manage Trainers', icon: <PersonIcon />, path: '/manage-trainers' },
-  { text: 'Reports', icon: <AssessmentIcon />, path: '/reports' },
+const ALL_MENU_ITEMS = [
+  { text: 'Dashboard', icon: <DashboardIcon />, path: '/manager-dashboard', roles: ['supervisor'] },
+  { text: 'Dashboard', icon: <DashboardIcon />, path: '/trainer-dashboard', roles: ['trainer'] },
+  { text: 'Add Training', icon: <AddIcon />, path: '/add-training', roles: ['supervisor', 'trainer'] },
+  { text: 'Upload Sheet', icon: <CloudUploadIcon />, path: '/upload-inservice', roles: ['supervisor', 'trainer'] },
+  { text: 'Certifications', icon: <VerifiedUserIcon />, path: '/certifications', roles: ['supervisor'] },
+  { text: 'Training Analytics', icon: <InsightsIcon />, path: '/training-analytics', roles: ['supervisor'] },
+  { text: 'Manage Employees', icon: <PeopleIcon />, path: '/manage-employees', roles: ['supervisor'] },
+  { text: 'Manage Topics', icon: <TopicIcon />, path: '/manage-topics', roles: ['supervisor'] },
+  { text: 'Manage Sites', icon: <LocationOnIcon />, path: '/manage-sites', roles: ['supervisor'] },
+  { text: 'Reports', icon: <AssessmentIcon />, path: '/reports', roles: ['supervisor', 'trainer'] },
+  { text: 'Employee Portal', icon: <PersonIcon />, path: '/employee', roles: ['supervisor', 'trainer'] },
 ];
 
 const Layout = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const theme = useTheme();
+  const { mode, systemMode, setMode } = useColorScheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const pathname = usePathname();
+  const { user, logout } = useAuth();
+  const menuItems = ALL_MENU_ITEMS.filter((item) => !user || item.roles.includes(user.role));
 
   useEffect(() => {
     setMounted(true);
@@ -55,19 +75,22 @@ const Layout = ({ children }) => {
     setMobileOpen(!mobileOpen);
   };
 
+  const resolvedMode = mode === 'system' ? systemMode : mode;
+  const handleToggleColorMode = () => {
+    setMode(resolvedMode === 'dark' ? 'light' : 'dark');
+  };
+
   const drawer = (
     <div>
-      <Toolbar>
-        <Typography variant="h6" noWrap component="div">
-          iTrain
-        </Typography>
+      <Toolbar sx={{ display: 'flex', alignItems: 'center' }}>
+        <BrandLogo iconSize={32} fontSize={20} />
       </Toolbar>
       <Divider />
       <List>
         {menuItems.map((item) => (
           <ListItem
             // button
-            key={item.text}
+            key={item.path}
             component={Link}
             href={item.path}
             selected={pathname === item.path}
@@ -89,9 +112,13 @@ const Layout = ({ children }) => {
     <Box sx={{ display: 'flex' }}>
       <AppBar
         position="fixed"
+        color="inherit"
+        elevation={1}
         sx={{
           width: { sm: `calc(100% - ${drawerWidth}px)` },
           ml: { sm: `${drawerWidth}px` },
+          bgcolor: 'background.paper',
+          color: 'text.primary',
         }}
       >
         <Toolbar>
@@ -107,8 +134,22 @@ const Layout = ({ children }) => {
           <Typography variant="h6" noWrap component="div">
             {menuItems.find(item => item.path === pathname)?.text || 'Training App'}
           </Typography>
-          <Box sx={{ ml: 'auto' }}>
-            <GoogleAuth /> {/* Add GoogleAuth component here */}
+          <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Tooltip title={resolvedMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+              <IconButton color="inherit" onClick={handleToggleColorMode} aria-label="toggle color mode">
+                {resolvedMode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
+              </IconButton>
+            </Tooltip>
+            {user && (
+              <>
+                <Typography variant="body2">
+                  Hi {user.name || user.email} ({user.role})
+                </Typography>
+                <Button color="inherit" size="small" startIcon={<LogoutIcon />} onClick={logout}>
+                  Logout
+                </Button>
+              </>
+            )}
           </Box>
         </Toolbar>
       </AppBar>

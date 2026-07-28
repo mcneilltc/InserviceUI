@@ -18,51 +18,132 @@ import {
   MenuItem,
   Button,
   TextField,
+  List,
+  ListItem,
+  ListItemText,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Checkbox,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterMoment } from '@mui/x-date-pickers/AdapterMoment';
 import axios from 'axios';
 import moment from 'moment';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-} from 'chart.js';
-import { Bar } from 'react-chartjs-2';
+import { Download as DownloadIcon, FileDownload as FileDownloadIcon, Warning as WarningIcon, Error as ErrorIcon, CheckCircle as CheckCircleIcon } from '@mui/icons-material';
+import { Chart as ChartJS, ArcElement, Tooltip as ChartTooltip, Legend } from 'chart.js';
+import { Doughnut } from 'react-chartjs-2';
+import { useRouter } from 'next/navigation';
 import EmployeeHoursTracker from '../../components/EmployeeHoursTracker';
+import { useAuth } from '../../components/AuthContext';
 
-// Register ChartJS components
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend
-);
+ChartJS.register(ArcElement, ChartTooltip, Legend);
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
 
 const ManagerDashboard = () => {
+  const router = useRouter();
+  const { user } = useAuth();
+  const isScopedSupervisor = user?.role === 'supervisor' && user?.supervisorScope === 'locations';
+
+  const [allSites, setAllSites] = useState([]);
+  useEffect(() => {
+    axios.get(`${BACKEND_URL}/api/sites`)
+      .then((res) => setAllSites(res.data.map((s) => s.name)))
+      .catch((err) => console.error('Failed to load sites:', err));
+  }, []);
+
+  const allowedSites = isScopedSupervisor && user.supervisorLocations?.length ? user.supervisorLocations : allSites;
+
   const [employees, setEmployees] = useState([]);
-  const [selectedEmployee, setSelectedEmployee] = useState('');
-  const [startDate, setStartDate] = useState(moment().startOf('month'));
-  const [endDate, setEndDate] = useState(moment().endOf('month'));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [stats, setStats] = useState(null);
+  const [checkIns, setCheckIns] = useState([]);
+  const [completedSessions, setCompletedSessions] = useState([]);
+  const [complianceData, setComplianceData] = useState(null);
+  const [complianceLoading, setComplianceLoading] = useState(false);
+
+  // A multi-select location filter whose MEANING depends on the supervisor's scope:
+  // - Scoped supervisor (e.g. ERRC only): their roster is always their own
+  //   home-based staff by default. This filter narrows by TRAINING location —
+  //   where those staff actually checked in/trained — so they can see when
+  //   their people trained at other sites. Useful for supervisors covering
+  //   several (but not all) sites who want a combined view of just those.
+  // - All-site supervisor: there's no fixed home roster, so this filter picks
+  //   which sites' HOME rosters to view instead.
+  // `['all']` means no narrowing; any other array is the set of selected sites.
+  const [locationFilters, setLocationFilters] = useState(['all']);
+  const isAllSites = locationFilters.includes('all');
+  const locationFilterLabel = isScopedSupervisor ? 'Training Location' : 'Home Location';
+
+  const handleLocationFilterChange = (event) => {
+    const { value } = event.target;
+    const selected = typeof value === 'string' ? value.split(',') : value;
+    // Selecting "All" clears specific sites; selecting a specific site clears "All".
+    if (selected.length === 0 || selected[selected.length - 1] === 'all') {
+      setLocationFilters(['all']);
+    } else {
+      setLocationFilters(selected.filter((v) => v !== 'all'));
+    }
+  };
+
+  const [period, setPeriod] = useState('month');
+  const [startDate, setStartDate] = useState(moment().startOf('month'));
+  const [endDate, setEndDate] = useState(moment().endOf('month'));
+  const [showEmployeesNeedingTraining, setShowEmployeesNeedingTraining] = useState(false);
+  // Which compliance alert's employee list is currently open in the dialog
+  // below ('midMonth' | 'needsNotice'), or null when the dialog is closed.
+  const [openAlert, setOpenAlert] = useState(null);
+
+  // Roster/home-location scoping — the security-relevant check, always
+  // enforced for a scoped supervisor regardless of what locationFilters means
+  // for them right now.
+  const inHomeScope = (location) => {
+    if (isScopedSupervisor) return allowedSites.includes(location);
+    if (!isAllSites) return locationFilters.includes(location);
+    return true;
+  };
 
   useEffect(() => {
     fetchEmployees();
     fetchStats();
-  }, [startDate, endDate]);
+    fetchCheckIns();
+    fetchCompletedSessions();
+    fetchComplianceStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locationFilters, period, startDate, endDate]);
+
+  const fetchCompletedSessions = async () => {
+    try {
+      const response = await axios.get(`${BACKEND_URL}/api/sessions`);
+      let completed = response.data.filter(s => s.status === 'completed');
+
+      if (!isAllSites) {
+        completed = completed.filter(s => locationFilters.includes(s.location));
+      } else if (isScopedSupervisor) {
+        completed = completed.filter(s => allowedSites.includes(s.location));
+      }
+
+      setCompletedSessions(completed);
+    } catch (error) {
+      console.error('Error fetching completed sessions:', error);
+      setCompletedSessions([]);
+    }
+  };
 
   const fetchEmployees = async () => {
     try {
-      const response = await axios.get('/api/employees');
+      const response = await axios.get(`${BACKEND_URL}/api/employees`);
       setEmployees(response.data);
     } catch (error) {
       console.error('Error fetching employees:', error);
@@ -73,20 +154,87 @@ const ManagerDashboard = () => {
   const fetchStats = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/api/training-sessions'); // Replace with your backend endpoint
-      const sessions = response.data;
-  
-      // Calculate stats
-      const totalHours = sessions.reduce((sum, session) => sum + parseFloat(session.length || 0), 0);
-      const activeEmployees = new Set(sessions.map((session) => session.trainer)).size;
-      const trainingSessions = sessions.length;
-  
-      setStats({ totalHours, activeEmployees, trainingSessions });
+      const params = {
+        period: period !== 'custom' ? period : undefined,
+        startDate: period === 'custom' ? startDate.toISOString() : undefined,
+        endDate: period === 'custom' ? endDate.toISOString() : undefined,
+        // Scoped supervisor: locationFilters narrows by training location(s).
+        // All-site supervisor: locationFilters narrows the roster by home site(s).
+        workSite: isScopedSupervisor && !isAllSites ? locationFilters.join(',') : undefined,
+        homeSite: !isScopedSupervisor && !isAllSites ? locationFilters.join(',') : undefined,
+      };
+
+      const response = await axios.get(`${BACKEND_URL}/api/dashboard/stats`, { params });
+      setStats(response.data);
     } catch (error) {
       console.error('Error fetching stats:', error);
       setError('Failed to fetch statistics');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchComplianceStatus = async () => {
+    try {
+      setComplianceLoading(true);
+      const params = {
+        month: startDate.format('YYYY-MM'),
+      };
+      const response = await axios.get(`${BACKEND_URL}/api/compliance/status`, { params });
+      let data = response.data;
+
+      // This endpoint doesn't support site filtering server-side — scope it
+      // here by home location, for a location-limited supervisor or an
+      // all-site supervisor who's picked a home site to view.
+      if (data) {
+        const scopedEmployees = data.allEmployees.filter(e => inHomeScope(e.location));
+        const scopedBySite = Object.fromEntries(
+          Object.entries(data.bySite).filter(([site]) => inHomeScope(site))
+        );
+        const compliantCount = scopedEmployees.filter(e => e.status === 'compliant').length;
+        data = {
+          ...data,
+          allEmployees: scopedEmployees,
+          bySite: scopedBySite,
+          overall: {
+            total: scopedEmployees.length,
+            compliant: compliantCount,
+            partial: scopedEmployees.filter(e => e.status === 'partial').length,
+            atRisk: scopedEmployees.filter(e => e.status === 'at_risk').length,
+            zero: scopedEmployees.filter(e => e.status === 'zero').length,
+            percentCompliant: scopedEmployees.length > 0 ? Math.round((compliantCount / scopedEmployees.length) * 100) : 0,
+          },
+          alerts: {
+            midMonth: data.alerts.midMonth.filter(e => inHomeScope(e.location)),
+            needsNotice: data.alerts.needsNotice.filter(e => inHomeScope(e.location)),
+            endOfMonth: data.alerts.endOfMonth.filter(e => inHomeScope(e.location)),
+          },
+        };
+      }
+
+      setComplianceData(data);
+    } catch (error) {
+      console.error('Error fetching compliance status:', error);
+    } finally {
+      setComplianceLoading(false);
+    }
+  };
+
+  const fetchCheckIns = async () => {
+    try {
+      // The backend already scopes by the checked-in employee's home
+      // location (never trust client-side filtering for this). `location`
+      // narrows by where training happened (scoped supervisor's use case);
+      // `homeSite` narrows the roster itself (all-site supervisor's use case).
+      const params = {
+        location: isScopedSupervisor && !isAllSites ? locationFilters.join(',') : undefined,
+        homeSite: !isScopedSupervisor && !isAllSites ? locationFilters.join(',') : undefined,
+      };
+      const response = await axios.get(`${BACKEND_URL}/api/checkin`, { params });
+      setCheckIns(response.data || []);
+    } catch (error) {
+      console.error('Error fetching check-ins:', error);
+      setCheckIns([]);
     }
   };
 
@@ -96,101 +244,568 @@ const ManagerDashboard = () => {
     }
   };
 
+  const handleDownloadSiteReport = (siteName, employeesList) => {
+    const headers = ['Name', 'Email', 'Location', 'Hours This Month', 'Needed By 15th', 'Needed By End', 'Status'];
+    const csvContent = [
+      headers.join(','),
+      ...employeesList.map(emp => [
+        `"${emp.name || ''}"`,
+        `"${emp.email || ''}"`,
+        `"${emp.location || ''}"`,
+        emp.hoursThisMonth || 0,
+        emp.hoursNeededByMidMonth || 0,
+        emp.hoursNeededByEndOfMonth || 0,
+        emp.status
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `compliance_report_${siteName.replace(/\s+/g, '_')}_${moment().format('YYYY-MM-DD')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleDownloadReport = async () => {
+    try {
+      // /api/reports filters by check-in/session location, not home location —
+      // only meaningful to pass workSite here for a scoped supervisor (whose
+      // locationFilters means training location); an all-site supervisor's
+      // home-location filter doesn't map onto this endpoint, so this report
+      // stays company-wide for them.
+      const params = {
+        workSite: isScopedSupervisor
+          ? (!isAllSites ? locationFilters.join(',') : allowedSites.join(','))
+          : undefined,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+      };
+
+      const response = await axios.get(`${BACKEND_URL}/api/reports`, { params });
+      const reportData = response.data;
+
+      // Convert to CSV
+      const headers = ['Name', 'Email', 'Phone', 'Work Site', 'Check-in Time', 'Training Hours Completed'];
+      const csvContent = [
+        headers.join(','),
+        ...reportData.map(row => [
+          `"${row.name || ''}"`,
+          `"${row.email || ''}"`,
+          `"${row.phone || ''}"`,
+          `"${row.workSite || ''}"`,
+          `"${row.checkinTime || ''}"`,
+          row.trainingHoursCompleted || 0
+        ].join(','))
+      ].join('\n');
+
+      // Download CSV
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `training_report_${moment().format('YYYY-MM-DD')}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Error downloading report:', error);
+      alert('Failed to download report');
+    }
+  };
+
   return (
     <Container maxWidth="lg">
       <Box sx={{ py: 4 }}>
-        <Typography variant="h4" gutterBottom>
-          Manager Dashboard
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+          <Box>
+            <Typography variant="h4" fontWeight="bold" gutterBottom>
+              Manager Dashboard
+            </Typography>
+            {user && (
+              <Typography variant="h6" color="text.secondary">
+                Hi {user.name || user.email}
+              </Typography>
+            )}
+          </Box>
+          <Stack direction="row" spacing={2}>
+            <Button
+              variant="outlined"
+              startIcon={<DownloadIcon />}
+              onClick={handleDownloadReport}
+            >
+              Full Report
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<CheckCircleIcon />}
+              color="success"
+              onClick={() => setShowEmployeesNeedingTraining(true)}
+            >
+              Compliance Overview
+            </Button>
+          </Stack>
+        </Box>
 
-        {/* Date Range Selection */}
+        {/* Compliance Alerts */}
+        {complianceData && (
+          <Box sx={{ mb: 4 }}>
+            {moment().date() >= 15 && complianceData.alerts.midMonth.length > 0 && (
+              <Alert
+                severity="error"
+                icon={<ErrorIcon />}
+                sx={{ mb: 2, borderRadius: 2, fontWeight: 'bold', cursor: 'pointer' }}
+                onClick={() => setOpenAlert('midMonth')}
+                action={
+                  <Button color="inherit" size="small" onClick={() => setOpenAlert('midMonth')}>
+                    View List
+                  </Button>
+                }
+              >
+                URGENT: {complianceData.alerts.midMonth.length} employees have 0 hours of inservice recorded as of the 15th.
+              </Alert>
+            )}
+            {moment().date() < 15 && complianceData.alerts.needsNotice.length > 0 && (
+              <Alert
+                severity="warning"
+                icon={<WarningIcon />}
+                sx={{ mb: 2, borderRadius: 2, cursor: 'pointer' }}
+                onClick={() => setOpenAlert('needsNotice')}
+                action={
+                  <Button color="inherit" size="small" onClick={() => setOpenAlert('needsNotice')}>
+                    View List
+                  </Button>
+                }
+              >
+                Notice: {complianceData.alerts.needsNotice.length} employees are under the 2-hour requirement for the 15th.
+              </Alert>
+            )}
+          </Box>
+        )}
+
+        {/* Compliance alert employee list dialog */}
+        <Dialog open={Boolean(openAlert)} onClose={() => setOpenAlert(null)} maxWidth="sm" fullWidth>
+          <DialogTitle>
+            {openAlert === 'midMonth'
+              ? 'Employees with 0 hours recorded'
+              : 'Employees under the 2-hour requirement'}
+          </DialogTitle>
+          <DialogContent dividers>
+            {openAlert && (
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Name</TableCell>
+                    <TableCell>Location</TableCell>
+                    <TableCell align="right">Hours This Month</TableCell>
+                    <TableCell align="right">Needed by 15th</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {complianceData.alerts[openAlert].map((emp) => (
+                    <TableRow key={emp.id}>
+                      <TableCell>
+                        <Typography
+                          component="span"
+                          sx={{ cursor: 'pointer', textDecoration: 'underline', fontWeight: 600 }}
+                          onClick={() => router.push(`/manage-employees/${emp.id}`)}
+                        >
+                          {emp.name}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>{emp.location}</TableCell>
+                      <TableCell align="right">{(emp.hoursThisMonth || 0).toFixed(1)}</TableCell>
+                      <TableCell align="right">{(emp.hoursNeededByMidMonth || 0).toFixed(1)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOpenAlert(null)}>Close</Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Filters */}
         <Paper sx={{ p: 3, mb: 4 }}>
           <Typography variant="h6" gutterBottom>
-            Select Date Range
+            Filters
           </Typography>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }}>
-            <LocalizationProvider dateAdapter={AdapterMoment}>
-              <DatePicker
-                label="Start Date"
-                value={startDate}
-                onChange={(newValue) => handleDateChange(newValue, setStartDate)}
-                slotProps={{
-                  textField: {
-                    fullWidth: true,
-                  },
-                }}
-              />
-              <DatePicker
-                label="End Date"
-                value={endDate}
-                onChange={(newValue) => handleDateChange(newValue, setEndDate)}
-                slotProps={{
-                  textField: {
-                    fullWidth: true,
-                  },
-                }}
-              />
-            </LocalizationProvider>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+            <FormControl fullWidth>
+              <InputLabel>{locationFilterLabel}</InputLabel>
+              <Select
+                multiple
+                value={locationFilters}
+                label={locationFilterLabel}
+                onChange={handleLocationFilterChange}
+                renderValue={(selected) =>
+                  selected.includes('all')
+                    ? (isScopedSupervisor ? 'All (My Staff)' : 'All Sites')
+                    : selected.join(', ')
+                }
+              >
+                <MenuItem value="all">
+                  <Checkbox checked={isAllSites} />
+                  <ListItemText primary={isScopedSupervisor ? 'All (My Staff)' : 'All Sites'} />
+                </MenuItem>
+                {allSites.map((site) => (
+                  <MenuItem key={site} value={site}>
+                    <Checkbox checked={locationFilters.includes(site)} />
+                    <ListItemText primary={site} />
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <FormControl fullWidth>
+              <InputLabel>Period</InputLabel>
+              <Select
+                value={period}
+                label="Period"
+                onChange={(e) => setPeriod(e.target.value)}
+              >
+                <MenuItem value="day">Day</MenuItem>
+                <MenuItem value="week">Week</MenuItem>
+                <MenuItem value="month">Month</MenuItem>
+                <MenuItem value="year">Year</MenuItem>
+                <MenuItem value="custom">Select Date Range</MenuItem>
+              </Select>
+            </FormControl>
+
+            {period === 'custom' && (
+              <>
+                <LocalizationProvider dateAdapter={AdapterMoment}>
+                  <DatePicker
+                    label="Start Date"
+                    value={startDate}
+                    onChange={(newValue) => handleDateChange(newValue, setStartDate)}
+                    slotProps={{
+                      textField: {
+                        fullWidth: true,
+                      },
+                    }}
+                  />
+                  <DatePicker
+                    label="End Date"
+                    value={endDate}
+                    onChange={(newValue) => handleDateChange(newValue, setEndDate)}
+                    slotProps={{
+                      textField: {
+                        fullWidth: true,
+                      },
+                    }}
+                  />
+                </LocalizationProvider>
+              </>
+            )}
           </Stack>
         </Paper>
 
+        {/* Graphical Overview */}
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          <Grid size={{ xs: 12, md: 4 }}>
+            <Card sx={{ height: '100%', borderRadius: 3, boxShadow: 3 }}>
+              <CardContent sx={{ textAlign: 'center' }}>
+                <Typography variant="h6" gutterBottom fontWeight="bold">
+                  Overall Compliance
+                </Typography>
+                <Box sx={{ position: 'relative', height: 200, display: 'flex', justifyContent: 'center', alignItems: 'center', my: 2 }}>
+                  {complianceLoading ? (
+                    <CircularProgress />
+                  ) : complianceData ? (
+                    <>
+                      <Doughnut 
+                        data={{
+                          labels: ['Compliant', 'Non-Compliant'],
+                          datasets: [{
+                            data: [complianceData.overall.compliant, complianceData.overall.total - complianceData.overall.compliant],
+                            backgroundColor: ['#4caf50', '#f44336'],
+                            borderWidth: 0,
+                            cutout: '80%',
+                          }]
+                        }}
+                        options={{
+                          plugins: { legend: { display: false } },
+                          maintainAspectRatio: false,
+                        }}
+                      />
+                      <Box sx={{ position: 'absolute', textAlign: 'center' }}>
+                        <Typography variant="h3" fontWeight="bold">
+                          {complianceData.overall.percentCompliant}%
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          TARGET MET
+                        </Typography>
+                      </Box>
+                    </>
+                  ) : (
+                    <Typography color="text.secondary">No data available</Typography>
+                  )}
+                </Box>
+                <Typography variant="body2" color="text.secondary">
+                  Target: 4 hours by month end
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          
+          <Grid size={{ xs: 12, md: 8 }}>
+            <Grid container spacing={2}>
+              {complianceData && Object.entries(complianceData.bySite).map(([siteName, siteStats]) => (
+                <Grid size={{ xs: 12, sm: 6 }} key={siteName}>
+                  <Card sx={{ p: 2, borderRadius: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Box sx={{ width: 80, height: 80, position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                      <Doughnut 
+                        data={{
+                          data: [siteStats.compliant, siteStats.total - siteStats.compliant],
+                          datasets: [{
+                            data: [siteStats.compliant, siteStats.total - siteStats.compliant],
+                            backgroundColor: ['#4caf50', '#e0e0e0'],
+                            borderWidth: 0,
+                            cutout: '75%',
+                          }]
+                        }}
+                        options={{ plugins: { legend: { display: false } }, maintainAspectRatio: false }}
+                      />
+                      <Typography variant="caption" fontWeight="bold" sx={{ position: 'absolute' }}>
+                        {siteStats.percentCompliant}%
+                      </Typography>
+                    </Box>
+                    <Box sx={{ flexGrow: 1 }}>
+                      <Typography variant="subtitle1" fontWeight="bold">{siteName}</Typography>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        {siteStats.compliant} / {siteStats.total} compliant
+                      </Typography>
+                      <Button 
+                        size="small" 
+                        variant="text" 
+                        startIcon={<FileDownloadIcon />}
+                        onClick={() => handleDownloadSiteReport(siteName, complianceData.allEmployees.filter(e => e.location === siteName && e.status !== 'compliant'))}
+                        sx={{ mt: 0.5 }}
+                      >
+                        Site Deficiency List
+                      </Button>
+                    </Box>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          </Grid>
+        </Grid>
+
         {/* Statistics Cards */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
-          <Grid item xs={12} md={4}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <Paper sx={{ p: 3, textAlign: 'center' }}>
               <Typography variant="h6" gutterBottom>
-                Total Training Hours
+                Completions
               </Typography>
               {loading ? (
-                <CircularProgress />
+                <CircularProgress size={24} />
               ) : error ? (
                 <Alert severity="error">{error}</Alert>
               ) : (
                 <Typography variant="h4">
-                  {stats?.totalHours || 0}
+                  {stats?.completions || 0}
                 </Typography>
               )}
             </Paper>
           </Grid>
-          <Grid item xs={12} md={4}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <Paper sx={{ p: 3, textAlign: 'center' }}>
               <Typography variant="h6" gutterBottom>
-                Active Employees
+                Need to Complete
               </Typography>
               {loading ? (
-                <CircularProgress />
+                <CircularProgress size={24} />
               ) : error ? (
                 <Alert severity="error">{error}</Alert>
               ) : (
-                <Typography variant="h4">
-                  {stats?.activeEmployees || 0}
+                <Typography variant="h4" color="error">
+                  {stats?.needToComplete || 0}
                 </Typography>
               )}
             </Paper>
           </Grid>
-          <Grid item xs={12} md={4}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <Paper sx={{ p: 3, textAlign: 'center' }}>
               <Typography variant="h6" gutterBottom>
-                Training Sessions
+                Training Completed {!isAllSites ? `(${locationFilters.join(', ')})` : ''}
               </Typography>
               {loading ? (
-                <CircularProgress />
+                <CircularProgress size={24} />
               ) : error ? (
                 <Alert severity="error">{error}</Alert>
               ) : (
                 <Typography variant="h4">
-                  {stats?.trainingSessions || 0}
+                  {!isAllSites ? (stats?.trainingCompleted || 0) : (stats?.trainingCompletedAllSites || 0)}
+                </Typography>
+              )}
+            </Paper>
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <Paper sx={{ p: 3, textAlign: 'center' }}>
+              <Typography variant="h6" gutterBottom>
+                Total Sessions
+              </Typography>
+              {loading ? (
+                <CircularProgress size={24} />
+              ) : error ? (
+                <Alert severity="error">{error}</Alert>
+              ) : (
+                <Typography variant="h4">
+                  {stats?.totalSessions || 0}
                 </Typography>
               )}
             </Paper>
           </Grid>
         </Grid>
 
+        {/* Employees Needing Training */}
+        <Paper sx={{ p: 3, mb: 4 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6">
+              Employees Needing Training {!isAllSites && !isScopedSupervisor ? `(${locationFilters.join(', ')})` : ''}
+            </Typography>
+            <Button
+              variant="outlined"
+              onClick={() => setShowEmployeesNeedingTraining(!showEmployeesNeedingTraining)}
+            >
+              {showEmployeesNeedingTraining ? 'Hide' : 'Show'} List
+            </Button>
+          </Box>
+          {showEmployeesNeedingTraining && stats?.employeesNeedingTraining && (
+            <TableContainer sx={{ maxHeight: 400, overflow: 'auto' }}>
+              <Table stickyHeader>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Name</TableCell>
+                    <TableCell>Location</TableCell>
+                    <TableCell align="right">Hours Left</TableCell>
+                    <TableCell>Status</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {stats.employeesNeedingTraining
+                    .map((emp) => {
+                      const getStatusColor = () => {
+                        if (emp.status === 'complete') return '#4caf50'; // Green
+                        if (emp.status === 'atRisk') return '#ffeb3b'; // Yellow
+                        return '#f44336'; // Red
+                      };
+                      
+                      const getStatusLabel = () => {
+                        if (emp.status === 'complete') return 'Complete';
+                        if (emp.status === 'atRisk') return 'At Risk';
+                        return 'Incomplete';
+                      };
+                      
+                      return (
+                        <TableRow 
+                          key={emp.id}
+                          sx={{
+                            bgcolor: getStatusColor(),
+                            '&:hover': { bgcolor: getStatusColor(), opacity: 0.8 }
+                          }}
+                        >
+                          <TableCell>
+                            <Typography
+                              component="span"
+                              sx={{ cursor: 'pointer', textDecoration: 'underline', fontWeight: 600, color: 'inherit' }}
+                              onClick={() => router.push(`/manage-employees/${emp.id}`)}
+                            >
+                              {emp.name}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>{emp.location}</TableCell>
+                          <TableCell align="right">{emp.hoursLeft ? emp.hoursLeft.toFixed(1) : '0.0'}</TableCell>
+                          <TableCell>
+                            <Chip 
+                              label={getStatusLabel()} 
+                              size="small"
+                              color={
+                                emp.status === 'complete' ? 'success' :
+                                emp.status === 'atRisk' ? 'warning' : 'error'
+                              }
+                            />
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </Paper>
+
         {/* Employee Hours Tracker */}
-        <EmployeeHoursTracker />
+        <EmployeeHoursTracker
+          allowedLocations={
+            isScopedSupervisor
+              ? allowedSites
+              : (!isAllSites ? locationFilters : null)
+          }
+        />
+
+        {/* Completed Trainings */}
+        <Paper sx={{ p: 4, mt: 4 }}>
+          <Typography variant="h5" gutterBottom>
+            Completed Trainings {!isAllSites ? `(${locationFilters.join(', ')})` : ''}
+          </Typography>
+          {loading ? (
+            <CircularProgress />
+          ) : (
+            <List>
+              {completedSessions.length > 0 ? (
+                completedSessions.slice(0, 10).map((session) => (
+                  <ListItem key={session.id || `session-${session.topic}-${session.date}`}>
+                    <ListItemText
+                      primary={session.topic || session.name || 'Training Session'}
+                      secondary={`Date: ${session.date || 'N/A'}, Location: ${session.location || 'N/A'}, Trainees: ${session.trainees?.length || 0}`}
+                    />
+                  </ListItem>
+                ))
+              ) : (
+                <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
+                  No completed trainings found
+                </Typography>
+              )}
+            </List>
+          )}
+        </Paper>
+
+        {/* Recent Check-Ins */}
+        <Paper sx={{ p: 4, mt: 4 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h5" gutterBottom>
+              Recent Check-Ins {!isAllSites ? `(${locationFilters.join(', ')})` : ''}
+            </Typography>
+          </Box>
+          <List>
+            {checkIns.slice(0, 10).map((checkIn) => (
+              <ListItem key={checkIn.id}>
+                <ListItemText
+                  primary={`${checkIn.name} (${checkIn.email})`}
+                  secondary={`Phone: ${checkIn.phone}, Location: ${checkIn.location}, Time: ${moment(checkIn.checkinTime).format('MM/DD/YYYY HH:mm')}`}
+                />
+              </ListItem>
+            ))}
+            {checkIns.length === 0 && (
+              <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
+                No check-ins found
+              </Typography>
+            )}
+          </List>
+        </Paper>
       </Box>
     </Container>
   );
 };
 
-export default ManagerDashboard; 
+export default ManagerDashboard;
