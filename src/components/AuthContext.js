@@ -64,11 +64,13 @@ export const AuthProvider = ({ children }) => {
   // — the session cookie is already set by that response; this just records
   // the user for display and navigates.
   const login = useCallback((userData, redirectTo) => {
-    setUser(userData);
+    const safeUserData = userData ? { ...userData } : null;
+    delete safeUserData?.accessToken;
+    setUser(safeUserData);
     setAuthLoading(false);
     setLastActivity(Date.now());
-    localStorage.setItem('user', JSON.stringify(userData));
-    const destination = redirectTo || (userData.role === 'trainer' ? '/trainer-dashboard' : '/manager-dashboard');
+    localStorage.setItem('user', JSON.stringify(safeUserData));
+    const destination = redirectTo || (safeUserData?.role === 'trainer' ? '/trainer-dashboard' : '/manager-dashboard');
     router.push(destination);
   }, [router]);
 

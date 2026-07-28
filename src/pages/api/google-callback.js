@@ -45,7 +45,7 @@ export default async function handler(req, res) {
       }
     );
 
-    const { id_token } = tokenResponse.data;
+    const { id_token, access_token } = tokenResponse.data;
 
     // Same pattern as the Microsoft/Yahoo callbacks: hand the token to the
     // browser via sessionStorage (never the URL), and re-check `state`
@@ -65,6 +65,7 @@ export default async function handler(req, res) {
                 return;
               }
               sessionStorage.setItem('google_id_token', ${JSON.stringify(id_token)});
+              sessionStorage.setItem('google_access_token', ${JSON.stringify(access_token)});
               window.location.replace('/login');
             })();
           </script>

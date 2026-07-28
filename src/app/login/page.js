@@ -14,6 +14,7 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost
 // Each provider's callback route stashes its token under a distinct
 // sessionStorage key so a completed flow can be told apart from the others.
 const TOKEN_HANDLERS = [
+  { storageKey: 'google_access_token', backendPath: '/api/auth/google', bodyKey: 'accessToken' },
   { storageKey: 'google_id_token', backendPath: '/api/auth/google', bodyKey: 'idToken' },
   { storageKey: 'microsoft_access_token', backendPath: '/api/auth/microsoft', bodyKey: 'accessToken' },
   { storageKey: 'yahoo_access_token', backendPath: '/api/auth/yahoo', bodyKey: 'accessToken' },
