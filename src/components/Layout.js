@@ -35,6 +35,7 @@ import {
   LightMode as LightModeIcon,
   DarkMode as DarkModeIcon,
   Insights as InsightsIcon,
+  EventAvailable as EventAvailableIcon,
 } from '@mui/icons-material';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -55,6 +56,7 @@ const ALL_MENU_ITEMS = [
   { text: 'Manage Sites', icon: <LocationOnIcon />, path: '/manage-sites', roles: ['supervisor'] },
   { text: 'Reports', icon: <AssessmentIcon />, path: '/reports', roles: ['supervisor', 'trainer'] },
   { text: 'Employee Portal', icon: <PersonIcon />, path: '/employee', roles: ['supervisor', 'trainer'] },
+  { text: 'Shifts', icon: <EventAvailableIcon />, path: '/shifts', roles: ['employee'] },
 ];
 
 const Layout = ({ children }) => {

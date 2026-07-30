@@ -11,6 +11,7 @@ import {
   Login as LoginIcon,
   FactCheck as FactCheckIcon,
   ArrowForward as ArrowForwardIcon,
+  EventAvailable as EventAvailableIcon,
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -94,7 +95,7 @@ export default function EmployeePortal() {
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           spacing={3}
-          sx={{ width: '100%', maxWidth: 560 }}
+          sx={{ width: '100%', maxWidth: 840 }}
         >
           {/* Manager Login */}
           <Card
@@ -155,6 +156,40 @@ export default function EmployeePortal() {
                 tabIndex={-1}
               >
                 Check Hours
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Shift Pickup — separate authenticated login from the badge/name
+              lookup above; see /employee-login. */}
+          <Card
+            component={Link}
+            href="/employee-login"
+            sx={{
+              flex: 1,
+              textDecoration: 'none',
+              borderRadius: 3,
+              cursor: 'pointer',
+              transition: 'transform 0.2s, box-shadow 0.2s',
+              '&:hover': { transform: 'translateY(-4px)', boxShadow: 8 },
+            }}
+          >
+            <CardContent sx={{ textAlign: 'center', py: 4 }}>
+              <EventAvailableIcon sx={{ fontSize: 48, color: 'secondary.main', mb: 1 }} />
+              <Typography variant="h6" fontWeight="bold" gutterBottom>
+                Pick Up a Shift
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Log in to view and claim available inservice shifts
+              </Typography>
+              <Button
+                variant="contained"
+                color="secondary"
+                endIcon={<ArrowForwardIcon />}
+                sx={{ mt: 2 }}
+                tabIndex={-1}
+              >
+                Log In
               </Button>
             </CardContent>
           </Card>
