@@ -18,6 +18,7 @@ const ROUTE_PERMISSIONS = [
   { prefix: '/add-training', roles: ['supervisor', 'trainer'] },
   { prefix: '/upload-inservice', roles: ['supervisor', 'trainer'] },
   { prefix: '/reports', roles: ['supervisor', 'trainer'] },
+  { prefix: '/shifts', roles: ['employee'] },
 ];
 
 function getRequiredRoles(pathname) {
@@ -26,6 +27,7 @@ function getRequiredRoles(pathname) {
 }
 
 function homeFor(role) {
+  if (role === 'employee') return '/shifts';
   return role === 'trainer' ? '/trainer-dashboard' : '/manager-dashboard';
 }
 

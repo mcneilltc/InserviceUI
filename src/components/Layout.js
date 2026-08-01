@@ -57,6 +57,7 @@ const ALL_MENU_ITEMS = [
   { text: 'Incentive Program', icon: <EmojiEventsIcon />, path: '/manage-incentives', roles: ['supervisor'] },
   { text: 'Reports', icon: <AssessmentIcon />, path: '/reports', roles: ['supervisor', 'trainer'] },
   { text: 'Employee Portal', icon: <PersonIcon />, path: '/employee', roles: ['supervisor', 'trainer'] },
+  { text: 'Shifts', icon: <EventAvailableIcon />, path: '/shifts', roles: ['employee'] },
 ];
 
 const Layout = ({ children }) => {

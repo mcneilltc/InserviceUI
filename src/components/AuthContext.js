@@ -70,7 +70,11 @@ export const AuthProvider = ({ children }) => {
     setAuthLoading(false);
     setLastActivity(Date.now());
     localStorage.setItem('user', JSON.stringify(safeUserData));
-    const destination = redirectTo || (safeUserData?.role === 'trainer' ? '/trainer-dashboard' : '/manager-dashboard');
+    const destination = redirectTo || (
+      safeUserData?.role === 'employee' ? '/shifts'
+      : safeUserData?.role === 'trainer' ? '/trainer-dashboard'
+      : '/manager-dashboard'
+    );
     router.push(destination);
   }, [router]);
 
