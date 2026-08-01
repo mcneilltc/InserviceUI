@@ -86,7 +86,7 @@ export default function EmployeeDetailPage() {
     );
   }
 
-  const { employee, compliance, sessions } = data;
+  const { employee, compliance, sessions, incentive } = data;
 
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
@@ -94,7 +94,7 @@ export default function EmployeeDetailPage() {
       <Typography variant="h4" sx={{ my: 2 }}>
         {employee.firstName} {employee.lastName}
       </Typography>
-      <EmployeeComplianceView employee={employee} compliance={compliance} sessions={sessions} />
+      <EmployeeComplianceView employee={employee} compliance={compliance} sessions={sessions} incentive={incentive} />
     </Container>
   );
 }

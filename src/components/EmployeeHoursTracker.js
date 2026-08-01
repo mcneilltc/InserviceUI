@@ -116,7 +116,7 @@ const EmployeeHoursTracker = ({ allowedLocations } = {}) => {
 
   return (
     <Paper sx={{ p: 3, mb: 4 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 2, mb: 2 }}>
         <Typography variant="h6">
           Employee Hours Tracker
         </Typography>

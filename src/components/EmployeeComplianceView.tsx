@@ -12,6 +12,8 @@ import {
   Error as ErrorIcon,
   Event as EventIcon,
   Pool as PoolIcon,
+  EmojiEvents as EmojiEventsIcon,
+  LocalFireDepartment as StreakIcon,
 } from '@mui/icons-material';
 import { Doughnut } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
@@ -58,10 +60,30 @@ export interface Employee {
   isEliteSupervisor?: boolean;
 }
 
+export interface IncentiveTier {
+  id: string;
+  streakLength: number;
+  rewardLabel: string;
+}
+
+export interface IncentiveInfo {
+  monthKey: string;
+  hoursByThe15th: number;
+  hoursNeeded: number;
+  qualifiedThisMonth: boolean | undefined; // undefined = still time before the 15th
+  deadlinePassed: boolean;
+  currentStreak: number;
+  currentTier: IncentiveTier | null;
+  nextTier: IncentiveTier | null;
+  monthsUntilNextTier: number | null;
+  annual: { year: number; monthsQualified: number; monthsDecided: number };
+}
+
 export interface EmployeeSelfData {
   employee: Employee;
   compliance: ComplianceInfo;
   sessions: Session[];
+  incentive?: IncentiveInfo;
 }
 
 const statusConfig = {
@@ -92,9 +114,10 @@ export interface EmployeeComplianceViewProps {
   employee: Employee;
   compliance: ComplianceInfo;
   sessions: Session[];
+  incentive?: IncentiveInfo;
 }
 
-export default function EmployeeComplianceView({ employee, compliance, sessions }: EmployeeComplianceViewProps) {
+export default function EmployeeComplianceView({ employee, compliance, sessions, incentive }: EmployeeComplianceViewProps) {
   const status = statusConfig[compliance.status];
   const endOfMonthTarget = compliance.thresholds.endOfMonth;
   const filledHours = Math.min(compliance.hoursThisMonth, endOfMonthTarget);
@@ -190,6 +213,53 @@ export default function EmployeeComplianceView({ employee, compliance, sessions 
           </Stack>
         </CardContent>
       </Card>
+
+      {/* Incentive program */}
+      {incentive && (
+        <Card sx={{ borderRadius: 3, boxShadow: 6, mb: 3 }}>
+          <CardContent>
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
+              <EmojiEventsIcon color={incentive.qualifiedThisMonth ? 'success' : 'action'} />
+              <Typography variant="h6" fontWeight="bold">
+                Incentive Program
+              </Typography>
+            </Stack>
+
+            {incentive.qualifiedThisMonth === true ? (
+              <Alert severity="success" sx={{ borderRadius: 2 }}>
+                You&apos;ve recorded {incentive.hoursByThe15th} hours before the 15th — you qualify for this month&apos;s incentive!
+              </Alert>
+            ) : incentive.qualifiedThisMonth === false ? (
+              <Alert severity="error" sx={{ borderRadius: 2 }}>
+                The 15th passed with {incentive.hoursByThe15th} of 4 hours recorded — not eligible this month.
+              </Alert>
+            ) : (
+              <Alert severity="warning" sx={{ borderRadius: 2 }}>
+                {incentive.hoursNeeded} more hour(s) needed by the 15th to qualify ({incentive.hoursByThe15th} of 4 so far).
+              </Alert>
+            )}
+
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 2 }}>
+              <StreakIcon color={incentive.currentStreak > 0 ? 'warning' : 'disabled'} fontSize="small" />
+              <Typography variant="body2">
+                <strong>{incentive.currentStreak}</strong>-month streak
+                {incentive.currentTier && <> — current reward: <strong>{incentive.currentTier.rewardLabel}</strong></>}
+              </Typography>
+            </Stack>
+
+            {incentive.nextTier && (
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                {incentive.monthsUntilNextTier} more qualifying month(s) to reach: {incentive.nextTier.rewardLabel}
+              </Typography>
+            )}
+
+            <Divider sx={{ my: 1.5 }} />
+            <Typography variant="caption" color="text.secondary">
+              {incentive.annual.monthsQualified} of {incentive.annual.monthsDecided} month(s) qualified in {incentive.annual.year} so far
+            </Typography>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Sessions this month */}
       <Card sx={{ borderRadius: 3, boxShadow: 6, mb: 3 }}>

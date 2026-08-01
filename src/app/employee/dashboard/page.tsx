@@ -115,7 +115,7 @@ export default function EmployeeDashboard() {
     );
   }
 
-  const { employee, compliance, sessions } = data;
+  const { employee, compliance, sessions, incentive } = data;
 
   return (
     <Box
@@ -141,7 +141,7 @@ export default function EmployeeDashboard() {
           </Typography>
         </Box>
 
-        <EmployeeComplianceView employee={employee} compliance={compliance} sessions={sessions} />
+        <EmployeeComplianceView employee={employee} compliance={compliance} sessions={sessions} incentive={incentive} />
 
       </Box>
     </Box>

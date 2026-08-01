@@ -551,7 +551,7 @@ export default function UploadInservicePage() {
                 <Divider sx={{ my: 3 }} />
 
                 {/* Topics table */}
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 1 }}>
                   <Typography variant="subtitle1" fontWeight={600}>
                     Topics ({form.topics.filter(t => t.matchedId).length} matched)
                   </Typography>
@@ -633,7 +633,7 @@ export default function UploadInservicePage() {
                 </TableContainer>
 
                 {/* Employees table */}
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 1 }}>
                   <Typography variant="subtitle1" fontWeight={600}>
                     Attendees ({form.employees.filter(e => e.matchedId).length} matched)
                   </Typography>
