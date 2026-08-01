@@ -321,7 +321,7 @@ const ManagerDashboard = () => {
   return (
     <Container maxWidth="lg">
       <Box sx={{ py: 4 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 2, mb: 4 }}>
           <Box>
             <Typography variant="h4" fontWeight="bold" gutterBottom>
               Manager Dashboard
@@ -332,7 +332,7 @@ const ManagerDashboard = () => {
               </Typography>
             )}
           </Box>
-          <Stack direction="row" spacing={2}>
+          <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap', gap: 2, width: { xs: '100%', sm: 'auto' } }}>
             <Button
               variant="outlined"
               startIcon={<DownloadIcon />}
@@ -669,7 +669,7 @@ const ManagerDashboard = () => {
 
         {/* Employees Needing Training */}
         <Paper sx={{ p: 3, mb: 4 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 2, mb: 2 }}>
             <Typography variant="h6">
               Employees Needing Training {!isAllSites && !isScopedSupervisor ? `(${locationFilters.join(', ')})` : ''}
             </Typography>

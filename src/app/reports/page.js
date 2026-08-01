@@ -15,6 +15,7 @@ import {
   Alert,
   CircularProgress,
   Table,
+  TableContainer,
   TableHead,
   TableBody,
   TableRow,
@@ -147,30 +148,32 @@ const Reports = () => {
 
         {/* Report Table */}
         {reportData.length > 0 && (
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Name</TableCell>
-                <TableCell>Email</TableCell>
-                <TableCell>Phone</TableCell>
-                <TableCell>Work Site</TableCell>
-                <TableCell>Check-in Time</TableCell>
-                <TableCell>Training Hours Completed</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {reportData.map((checkin, index) => (
-                <TableRow key={`${checkin.email}-${checkin.checkinTime}-${index}`}>
-                  <TableCell>{checkin.name}</TableCell>
-                  <TableCell>{checkin.email}</TableCell>
-                  <TableCell>{checkin.phone}</TableCell>
-                  <TableCell>{checkin.workSite}</TableCell>
-                  <TableCell>{checkin.checkinTime ? moment(checkin.checkinTime).format('MMM D, YYYY h:mm A') : ''}</TableCell>
-                  <TableCell>{checkin.trainingHoursCompleted}</TableCell>
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Name</TableCell>
+                  <TableCell>Email</TableCell>
+                  <TableCell>Phone</TableCell>
+                  <TableCell>Work Site</TableCell>
+                  <TableCell>Check-in Time</TableCell>
+                  <TableCell>Training Hours Completed</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHead>
+              <TableBody>
+                {reportData.map((checkin, index) => (
+                  <TableRow key={`${checkin.email}-${checkin.checkinTime}-${index}`}>
+                    <TableCell>{checkin.name}</TableCell>
+                    <TableCell>{checkin.email}</TableCell>
+                    <TableCell>{checkin.phone}</TableCell>
+                    <TableCell>{checkin.workSite}</TableCell>
+                    <TableCell>{checkin.checkinTime ? moment(checkin.checkinTime).format('MMM D, YYYY h:mm A') : ''}</TableCell>
+                    <TableCell>{checkin.trainingHoursCompleted}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
         )}
       </Paper>
     </Container>
