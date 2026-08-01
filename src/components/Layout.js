@@ -35,6 +35,7 @@ import {
   LightMode as LightModeIcon,
   DarkMode as DarkModeIcon,
   Insights as InsightsIcon,
+  EmojiEvents as EmojiEventsIcon,
 } from '@mui/icons-material';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -53,6 +54,7 @@ const ALL_MENU_ITEMS = [
   { text: 'Manage Employees', icon: <PeopleIcon />, path: '/manage-employees', roles: ['supervisor'] },
   { text: 'Manage Topics', icon: <TopicIcon />, path: '/manage-topics', roles: ['supervisor'] },
   { text: 'Manage Sites', icon: <LocationOnIcon />, path: '/manage-sites', roles: ['supervisor'] },
+  { text: 'Incentive Program', icon: <EmojiEventsIcon />, path: '/manage-incentives', roles: ['supervisor'] },
   { text: 'Reports', icon: <AssessmentIcon />, path: '/reports', roles: ['supervisor', 'trainer'] },
   { text: 'Employee Portal', icon: <PersonIcon />, path: '/employee', roles: ['supervisor', 'trainer'] },
 ];
@@ -142,7 +144,7 @@ const Layout = ({ children }) => {
             </Tooltip>
             {user && (
               <>
-                <Typography variant="body2">
+                <Typography variant="body2" sx={{ display: { xs: 'none', md: 'block' } }} noWrap>
                   Hi {user.name || user.email} ({user.role})
                 </Typography>
                 <Button color="inherit" size="small" startIcon={<LogoutIcon />} onClick={logout}>
@@ -189,6 +191,7 @@ const Layout = ({ children }) => {
         component="main"
         sx={{
           flexGrow: 1,
+          minWidth: 0, // flex items default to min-width:auto, which lets content refuse to shrink and overflow the viewport instead of wrapping
           p: 3,
           width: { sm: `calc(100% - ${drawerWidth}px)` },
           mt: '64px', // Height of AppBar
