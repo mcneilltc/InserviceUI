@@ -36,6 +36,8 @@ import {
   DarkMode as DarkModeIcon,
   Insights as InsightsIcon,
   EmojiEvents as EmojiEventsIcon,
+  EventAvailable as EventAvailableIcon,
+  EventBusy as EventBusyIcon,
 } from '@mui/icons-material';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -57,6 +59,7 @@ const ALL_MENU_ITEMS = [
   { text: 'Incentive Program', icon: <EmojiEventsIcon />, path: '/manage-incentives', roles: ['supervisor'] },
   { text: 'Reports', icon: <AssessmentIcon />, path: '/reports', roles: ['supervisor', 'trainer'] },
   { text: 'Employee Portal', icon: <PersonIcon />, path: '/employee', roles: ['supervisor', 'trainer'] },
+  { text: 'Shift Attendance', icon: <EventBusyIcon />, path: '/shift-attendance', roles: ['supervisor'] },
   { text: 'Shifts', icon: <EventAvailableIcon />, path: '/shifts', roles: ['employee'] },
 ];
 
