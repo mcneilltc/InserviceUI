@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getAppOrigin } from '../../lib/getAppOrigin';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -22,7 +23,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const redirectUri = `${req.headers.origin || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/google-callback`;
+    const redirectUri = `${getAppOrigin(req)}/api/google-callback`;
 
     // Exchange authorization code for tokens. With scope=openid, Google's
     // token endpoint returns an id_token alongside the access_token — that's
