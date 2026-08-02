@@ -21,7 +21,7 @@ import {
 import axios from 'axios';
 import { useAuth } from '../../components/AuthContext';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
+const BACKEND_URL = ''; // relative — proxied through next.config.mjs's rewrite so the session cookie is same-origin, not third-party
 
 // ---------------------------------------------------------------------------
 // Types

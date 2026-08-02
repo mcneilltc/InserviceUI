@@ -27,7 +27,7 @@ const CheckIn = () => {
 
   useEffect(() => {
     if (sessionId) {
-      const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
+      const BACKEND_URL = ''; // relative — proxied through next.config.mjs's rewrite so the session cookie is same-origin, not third-party
       axios
         .get(`${BACKEND_URL}/api/sessions/${sessionId}`)
         .then((response) => {
@@ -50,7 +50,7 @@ const CheckIn = () => {
   const handleSubmit = async (event) => {
     event.preventDefault();
     try {
-      const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
+      const BACKEND_URL = ''; // relative — proxied through next.config.mjs's rewrite so the session cookie is same-origin, not third-party
       await axios.post(`${BACKEND_URL}/api/checkin`, { sessionId, ...formData });
       setCheckedIn(true);
       setSnackbar({ open: true, message: 'Check-in successful! Your training time starts now.', severity: 'success' });
