@@ -15,11 +15,13 @@ const ROUTE_PERMISSIONS = [
   { prefix: '/manage-topics', roles: ['supervisor'] },
   { prefix: '/manage-sites', roles: ['supervisor'] },
   { prefix: '/manage-incentives', roles: ['supervisor'] },
-  { prefix: '/shift-attendance', roles: ['supervisor'] },
   { prefix: '/add-training', roles: ['supervisor', 'trainer'] },
   { prefix: '/upload-inservice', roles: ['supervisor', 'trainer'] },
   { prefix: '/reports', roles: ['supervisor', 'trainer'] },
-  { prefix: '/shifts', roles: ['employee'] },
+  // When I Work integration commented out of production for now — see
+  // components/Layout.js for the matching nav-entry comment.
+  // { prefix: '/shift-attendance', roles: ['supervisor'] },
+  // { prefix: '/shifts', roles: ['employee'] },
 ];
 
 function getRequiredRoles(pathname) {
