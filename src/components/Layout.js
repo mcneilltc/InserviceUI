@@ -59,8 +59,11 @@ const ALL_MENU_ITEMS = [
   { text: 'Incentive Program', icon: <EmojiEventsIcon />, path: '/manage-incentives', roles: ['supervisor'] },
   { text: 'Reports', icon: <AssessmentIcon />, path: '/reports', roles: ['supervisor', 'trainer'] },
   { text: 'Employee Portal', icon: <PersonIcon />, path: '/employee', roles: ['supervisor', 'trainer'] },
-  { text: 'Shift Attendance', icon: <EventBusyIcon />, path: '/shift-attendance', roles: ['supervisor'] },
-  { text: 'Shifts', icon: <EventAvailableIcon />, path: '/shifts', roles: ['employee'] },
+  // When I Work integration commented out of production for now — both of
+  // these depend on backend routes currently unmounted in app.ts. Restore
+  // together with the app.ts route mounts when re-enabling.
+  // { text: 'Shift Attendance', icon: <EventBusyIcon />, path: '/shift-attendance', roles: ['supervisor'] },
+  // { text: 'Shifts', icon: <EventAvailableIcon />, path: '/shifts', roles: ['employee'] },
 ];
 
 const Layout = ({ children }) => {

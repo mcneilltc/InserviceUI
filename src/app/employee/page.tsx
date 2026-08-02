@@ -11,7 +11,7 @@ import {
   Login as LoginIcon,
   FactCheck as FactCheckIcon,
   ArrowForward as ArrowForwardIcon,
-  EventAvailable as EventAvailableIcon,
+  // EventAvailable as EventAvailableIcon, // re-add when the "Pick Up a Shift" card below is restored
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -95,7 +95,7 @@ export default function EmployeePortal() {
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           spacing={3}
-          sx={{ width: '100%', maxWidth: 840 }}
+          sx={{ width: '100%', maxWidth: 560 }}
         >
           {/* Manager Login */}
           <Card
@@ -160,8 +160,12 @@ export default function EmployeePortal() {
             </CardContent>
           </Card>
 
-          {/* Shift Pickup — separate authenticated login from the badge/name
-              lookup above; see /employee-login. */}
+          {/* Shift Pickup — commented out of production for now (real When I
+              Work credential verification isn't implemented yet). Restore
+              this card, the EventAvailableIcon import above, and the 840
+              maxWidth on the Stack when re-enabling. See
+              /employee-login/page.tsx, which is still intact and just
+              unlinked from here.
           <Card
             component={Link}
             href="/employee-login"
@@ -193,6 +197,7 @@ export default function EmployeePortal() {
               </Button>
             </CardContent>
           </Card>
+          */}
         </Stack>
       </Box>
     );
