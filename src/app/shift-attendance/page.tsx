@@ -24,7 +24,7 @@ import axios from 'axios';
 import { useQuery } from '@tanstack/react-query';
 import moment from 'moment';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
+const BACKEND_URL = ''; // relative — proxied through next.config.mjs's rewrite so the session cookie is same-origin, not third-party
 
 interface AttendanceRow {
   shiftId: string;

@@ -6,7 +6,7 @@ import { Box, Card, CardContent, Typography, TextField, Button, CircularProgress
 import { EventAvailable as EventAvailableIcon } from '@mui/icons-material';
 import axios from 'axios';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
+const BACKEND_URL = ''; // relative — proxied through next.config.mjs's rewrite so the session cookie is same-origin, not third-party
 
 function SetPasswordForm() {
   const searchParams = useSearchParams();

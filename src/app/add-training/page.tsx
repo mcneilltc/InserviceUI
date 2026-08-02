@@ -59,7 +59,7 @@ import moment from "moment";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../components/AuthContext";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
+const BACKEND_URL = ''; // relative — proxied through next.config.mjs's rewrite so the session cookie is same-origin, not third-party
 import { QRCodeCanvas } from "qrcode.react";
 const AddTraining = () => {
   const { user } = useAuth();
@@ -277,7 +277,7 @@ const AddTraining = () => {
 
   const handleAddTrainees = async () => {
     try {
-      const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
+      const BACKEND_URL = ''; // relative — proxied through next.config.mjs's rewrite so the session cookie is same-origin, not third-party
       const sessionId = createdTrainingId;
       
       if (!sessionId) {
@@ -346,7 +346,7 @@ const AddTraining = () => {
     try {
       if (!selectedSessionForManualAdd || !manualEmployeeData.employeeId) return;
 
-      const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
+      const BACKEND_URL = ''; // relative — proxied through next.config.mjs's rewrite so the session cookie is same-origin, not third-party
 
       // Check the employee in directly — the trainer is vouching for their attendance
       await axios.post(`${BACKEND_URL}/api/checkin`, {
@@ -389,7 +389,7 @@ const AddTraining = () => {
 
   const handleUpdateTrainees = async (sessionId) => {
     setCreatedTrainingId(sessionId);
-    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
+    const BACKEND_URL = ''; // relative — proxied through next.config.mjs's rewrite so the session cookie is same-origin, not third-party
     try {
       // Fetch the latest session data
       const sessionResponse = await axios.get(`${BACKEND_URL}/api/sessions/${sessionId}`);
@@ -408,7 +408,7 @@ const AddTraining = () => {
 
   const handleCompleteTraining = async (sessionId) => {
     try {
-      const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:5001';
+      const BACKEND_URL = ''; // relative — proxied through next.config.mjs's rewrite so the session cookie is same-origin, not third-party
       const response = await axios.post(`${BACKEND_URL}/api/sessions/${sessionId}/close`);
 
       queryClient.invalidateQueries({ queryKey: ['sessions'] });
