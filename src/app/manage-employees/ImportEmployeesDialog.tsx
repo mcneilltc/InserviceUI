@@ -1,7 +1,7 @@
 // @ts-nocheck
 'use client';
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   Box, Button, Dialog, DialogTitle, DialogContent, DialogActions,
   Typography, Table, TableBody, TableCell, TableContainer, TableHead,
@@ -25,6 +25,7 @@ const BACKEND_URL = ''; // relative — proxied through next.config.mjs's rewrit
 const KNOWN_COLUMNS = {
   'Guard Name': 'name',
   'Badge Number': 'badgeNumber',
+  'Email': 'email',
   'Site': 'site',
   'Depth': 'depth',
   'Certification Expiration': 'certExpiration',
@@ -39,6 +40,7 @@ const KNOWN_COLUMNS = {
 const APP_FIELDS = [
   { value: 'name',             label: 'Guard Name *' },
   { value: 'badgeNumber',      label: 'Badge Number' },
+  { value: 'email',            label: 'Email' },
   { value: 'site',             label: 'Site / Location *' },
   { value: 'depth',            label: 'Pool Depth (7ft / 13ft)' },
   { value: 'certExpiration',   label: 'Certification Expiration' },
@@ -67,6 +69,22 @@ function parseBool(val: any): boolean {
   return s === 'yes' || s === 'y' || s === 'true' || s === '1' || s === 'x';
 }
 
+function normalizeSiteKey(name: string): string {
+  return String(name || '').trim().toLowerCase();
+}
+
+// Matches a spreadsheet's Site value against the real sites already set up
+// in Manage Sites — case/whitespace differences ("mcac " vs "MCAC") are
+// auto-corrected to the canonical stored name. A value that doesn't match
+// anything at all is left as-is (still imported, so a typo doesn't block
+// the whole batch) but flagged so the person importing can see it.
+function resolveSite(raw: string, knownSitesByKey: Map<string, string>): { resolved: string; recognized: boolean } {
+  const trimmed = String(raw || '').trim();
+  if (!trimmed) return { resolved: '', recognized: true };
+  const canonical = knownSitesByKey.get(normalizeSiteKey(trimmed));
+  return canonical ? { resolved: canonical, recognized: true } : { resolved: trimmed, recognized: false };
+}
+
 interface ImportEmployeesDialogProps {
   open: boolean;
   onClose: () => void;
@@ -83,6 +101,23 @@ export default function ImportEmployeesDialog({ open, onClose, onImportComplete 
   const [importing, setImporting] = useState(false);
   const [importResults, setImportResults] = useState<{ success: number; skipped: string[] } | null>(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
+  const [knownSitesByKey, setKnownSitesByKey] = useState<Map<string, string>>(new Map());
+  const [unrecognizedSites, setUnrecognizedSites] = useState<string[]>([]);
+
+  // Loaded once per time the dialog opens, so Site values can be matched
+  // against what's actually in Manage Sites (see resolveSite above).
+  useEffect(() => {
+    if (!open) return;
+    axios.get(`${BACKEND_URL}/api/sites`)
+      .then(({ data }) => {
+        const map = new Map<string, string>();
+        (data || []).forEach((s: any) => {
+          if (s?.name) map.set(normalizeSiteKey(s.name), s.name);
+        });
+        setKnownSitesByKey(map);
+      })
+      .catch(() => setKnownSitesByKey(new Map()));
+  }, [open]);
 
   const handleFileUpload = (file: File) => {
     const reader = new FileReader();
@@ -115,12 +150,24 @@ export default function ImportEmployeesDialog({ open, onClose, onImportComplete 
   };
 
   const buildPreview = () => {
+    // Checked across every row (not just the 5-row preview slice) so the
+    // warning below is accurate for the whole file, not just what's shown.
+    const unrecognized = new Set<string>();
+    rawRows.forEach(row => {
+      excelHeaders.forEach(h => {
+        if (columnMap[h] !== 'site') return;
+        const { recognized } = resolveSite(row[h], knownSitesByKey);
+        if (!recognized && String(row[h] || '').trim()) unrecognized.add(String(row[h]).trim());
+      });
+    });
+    setUnrecognizedSites(Array.from(unrecognized));
+
     const mapped = rawRows.slice(0, 5).map(row => {
       const out: any = {};
       excelHeaders.forEach(h => {
         const field = columnMap[h];
         if (field && field !== 'skip') {
-          out[field] = row[h];
+          out[field] = field === 'site' ? resolveSite(row[h], knownSitesByKey).resolved : row[h];
         }
       });
       // flip name
@@ -146,12 +193,15 @@ export default function ImportEmployeesDialog({ open, onClose, onImportComplete 
       const name = flipName(emp.name || '');
       if (!name) { skipped.push('Row with empty name'); continue; }
 
+      const { resolved: resolvedSite } = resolveSite(emp.site, knownSitesByKey);
+
       const payload = {
         name,
         email: emp.email || '',
         position: emp.depth ? `Lifeguard - ${emp.depth}` : 'Lifeguard',
         badgeNumber: emp.badgeNumber ? String(emp.badgeNumber).trim() : '',
-        locations: emp.site ? [emp.site] : [],
+        locations: resolvedSite ? [resolvedSite] : [],
+        homeLocation: resolvedSite || '',
         depth: emp.depth || null,
         certificationExpiration: emp.certExpiration || null,
         hasSlideCert: parseBool(emp.hasSlideCert),
@@ -207,6 +257,7 @@ export default function ImportEmployeesDialog({ open, onClose, onImportComplete 
     setColumnMap({});
     setPreview([]);
     setImportResults(null);
+    setUnrecognizedSites([]);
     onClose();
   };
 
@@ -289,11 +340,19 @@ export default function ImportEmployeesDialog({ open, onClose, onImportComplete 
             <Alert severity="success" sx={{ mb: 2 }}>
               Showing first {preview.length} of {rawRows.length} rows. Ready to import all {rawRows.length} employees.
             </Alert>
+            {unrecognizedSites.length > 0 && (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                <strong>{unrecognizedSites.length} site name{unrecognizedSites.length !== 1 ? 's' : ''} not found in Manage Sites:</strong>{' '}
+                {unrecognizedSites.join(', ')}. These employees will still import with that location, but won&apos;t show up
+                correctly in location filters until you add the site in Manage Sites or fix the spreadsheet and re-upload.
+              </Alert>
+            )}
             <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 400 }}>
               <Table size="small" stickyHeader>
                 <TableHead>
                   <TableRow>
                     <TableCell>Name</TableCell>
+                    <TableCell>Email</TableCell>
                     <TableCell>Badge #</TableCell>
                     <TableCell>Site</TableCell>
                     <TableCell>Depth</TableCell>
@@ -310,6 +369,7 @@ export default function ImportEmployeesDialog({ open, onClose, onImportComplete 
                   {preview.map((row, i) => (
                     <TableRow key={i}>
                       <TableCell>{row.name}</TableCell>
+                      <TableCell>{row.email}</TableCell>
                       <TableCell>{row.badgeNumber}</TableCell>
                       <TableCell>{row.site}</TableCell>
                       <TableCell>{row.depth}</TableCell>
