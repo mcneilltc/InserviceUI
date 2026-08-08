@@ -283,53 +283,6 @@ const ManagerDashboard = () => {
     document.body.removeChild(link);
   };
 
-  const handleDownloadReport = async () => {
-    try {
-      // /api/reports filters by check-in/session location, not home location —
-      // only meaningful to pass workSite here for a scoped supervisor (whose
-      // locationFilters means training location); an all-site supervisor's
-      // home-location filter doesn't map onto this endpoint, so this report
-      // stays company-wide for them.
-      const params = {
-        workSite: isScopedSupervisor
-          ? (!isAllSites ? locationFilters.join(',') : allowedSites.join(','))
-          : undefined,
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString(),
-      };
-
-      const response = await axios.get(`${BACKEND_URL}/api/reports`, { params });
-      const reportData = response.data;
-
-      // Convert to CSV
-      const headers = ['Name', 'Email', 'Phone', 'Work Site', 'Check-in Time', 'Training Hours Completed'];
-      const csvContent = [
-        headers.join(','),
-        ...reportData.map(row => [
-          `"${row.name || ''}"`,
-          `"${row.email || ''}"`,
-          `"${row.phone || ''}"`,
-          `"${row.workSite || ''}"`,
-          `"${row.checkinTime || ''}"`,
-          row.trainingHoursCompleted || 0
-        ].join(','))
-      ].join('\n');
-
-      // Download CSV
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', `training_report_${moment().format('YYYY-MM-DD')}.csv`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (error) {
-      console.error('Error downloading report:', error);
-      alert('Failed to download report');
-    }
-  };
 
   const visibleCompletedSessions = completedSessions
     .filter((s) => completedLocationFilter === 'all' || s.location === completedLocationFilter)
@@ -397,7 +350,7 @@ const ManagerDashboard = () => {
             <Button
               variant="outlined"
               startIcon={<DownloadIcon />}
-              onClick={handleDownloadReport}
+              onClick={() => router.push('/reports')}
             >
               Full Report
             </Button>

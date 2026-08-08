@@ -91,6 +91,7 @@ const ManageEmployees = () => {
     isSupervisor: false,
     supervisorScope: 'locations',
     isTrainer: false,
+    isExemptFromHoursRequirement: false,
   });
   const [activeTab, setActiveTab] = useState(0);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
@@ -237,6 +238,7 @@ const ManageEmployees = () => {
         isSupervisor: employee.isSupervisor || false,
         supervisorScope: employee.supervisorScope || 'locations',
         isTrainer: employee.isTrainer || false,
+        isExemptFromHoursRequirement: employee.isExemptFromHoursRequirement || false,
       });
     } else {
       setEditingEmployee(null);
@@ -253,6 +255,7 @@ const ManageEmployees = () => {
         isSupervisor: false,
         supervisorScope: 'locations',
         isTrainer: false,
+        isExemptFromHoursRequirement: false,
       });
     }
     setOpenDialog(true);
@@ -274,6 +277,7 @@ const ManageEmployees = () => {
       isSupervisor: false,
       supervisorScope: 'locations',
       isTrainer: false,
+      isExemptFromHoursRequirement: false,
     });
   };
 
@@ -718,6 +722,9 @@ const ManageEmployees = () => {
                       {employee.isTrainer && (
                         <Chip label="Trainer" size="small" color="info" />
                       )}
+                      {employee.isExemptFromHoursRequirement && (
+                        <Chip label="Hours-exempt" size="small" variant="outlined" />
+                      )}
                       {!employee.isSupervisor && !employee.isTrainer && '—'}
                     </Box>
                   </TableCell>
@@ -906,6 +913,19 @@ const ManageEmployees = () => {
                       <MenuItem value="all">All locations (company-wide)</MenuItem>
                     </Select>
                   </FormControl>
+                </Grid>
+              )}
+              {formData.isSupervisor && (
+                <Grid size={12}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={formData.isExemptFromHoursRequirement}
+                        onChange={(e) => setFormData({ ...formData, isExemptFromHoursRequirement: e.target.checked })}
+                      />
+                    }
+                    label="Exempt from the 4-hour monthly inservice requirement"
+                  />
                 </Grid>
               )}
               <Grid size={12}>
