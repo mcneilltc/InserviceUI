@@ -33,13 +33,16 @@ import {
   DialogContent,
   DialogActions,
   Checkbox,
+  IconButton,
+  TableSortLabel,
+  Tooltip,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterMoment } from '@mui/x-date-pickers/AdapterMoment';
 import axios from 'axios';
 import moment from 'moment';
-import { Download as DownloadIcon, FileDownload as FileDownloadIcon, Warning as WarningIcon, Error as ErrorIcon, CheckCircle as CheckCircleIcon } from '@mui/icons-material';
+import { Download as DownloadIcon, FileDownload as FileDownloadIcon, Warning as WarningIcon, Error as ErrorIcon, CheckCircle as CheckCircleIcon, ArrowUpward as ArrowUpwardIcon, ArrowDownward as ArrowDownwardIcon } from '@mui/icons-material';
 import { Chart as ChartJS, ArcElement, Tooltip as ChartTooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
 import { useRouter } from 'next/navigation';
@@ -72,6 +75,16 @@ const ManagerDashboard = () => {
   const [completedSessions, setCompletedSessions] = useState([]);
   const [complianceData, setComplianceData] = useState(null);
   const [complianceLoading, setComplianceLoading] = useState(false);
+
+  // Local filter/sort just for the Completed Trainings and Recent Check-Ins
+  // lists — independent of the page-wide location filter above, which also
+  // drives the stats cards and compliance section.
+  const [completedLocationFilter, setCompletedLocationFilter] = useState('all');
+  const [completedSortDir, setCompletedSortDir] = useState('desc');
+  const [checkInsLocationFilter, setCheckInsLocationFilter] = useState('all');
+  const [checkInsSortDir, setCheckInsSortDir] = useState('desc');
+  const [needsTrainingSortBy, setNeedsTrainingSortBy] = useState('name');
+  const [needsTrainingSortDir, setNeedsTrainingSortDir] = useState('asc');
 
   // A multi-select location filter whose MEANING depends on the supervisor's scope:
   // - Scoped supervisor (e.g. ERRC only): their roster is always their own
@@ -317,6 +330,54 @@ const ManagerDashboard = () => {
       alert('Failed to download report');
     }
   };
+
+  const visibleCompletedSessions = completedSessions
+    .filter((s) => completedLocationFilter === 'all' || s.location === completedLocationFilter)
+    .slice()
+    .sort((a, b) => {
+      const diff = moment(a.date).valueOf() - moment(b.date).valueOf();
+      return completedSortDir === 'asc' ? diff : -diff;
+    });
+
+  const visibleCheckIns = checkIns
+    .filter((c) => checkInsLocationFilter === 'all' || c.location === checkInsLocationFilter)
+    .slice()
+    .sort((a, b) => {
+      const diff = moment(a.checkinTime).valueOf() - moment(b.checkinTime).valueOf();
+      return checkInsSortDir === 'asc' ? diff : -diff;
+    });
+
+  // Worst-first ordering when sorted by status ascending — an incomplete
+  // employee needs attention more urgently than one who's merely at risk.
+  const NEEDS_TRAINING_STATUS_ORDER = { incomplete: 0, atRisk: 1, complete: 2 };
+
+  const handleNeedsTrainingSort = (column) => {
+    if (needsTrainingSortBy === column) {
+      setNeedsTrainingSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setNeedsTrainingSortBy(column);
+      setNeedsTrainingSortDir('asc');
+    }
+  };
+
+  const sortedEmployeesNeedingTraining = (stats?.employeesNeedingTraining || []).slice().sort((a, b) => {
+    let diff = 0;
+    switch (needsTrainingSortBy) {
+      case 'location':
+        diff = (a.location || '').localeCompare(b.location || '');
+        break;
+      case 'hoursLeft':
+        diff = (a.hoursLeft || 0) - (b.hoursLeft || 0);
+        break;
+      case 'status':
+        diff = (NEEDS_TRAINING_STATUS_ORDER[a.status] ?? 0) - (NEEDS_TRAINING_STATUS_ORDER[b.status] ?? 0);
+        break;
+      case 'name':
+      default:
+        diff = (a.name || '').localeCompare(b.name || '');
+    }
+    return needsTrainingSortDir === 'asc' ? diff : -diff;
+  });
 
   return (
     <Container maxWidth="lg">
@@ -685,14 +746,46 @@ const ManagerDashboard = () => {
               <Table stickyHeader>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Name</TableCell>
-                    <TableCell>Location</TableCell>
-                    <TableCell align="right">Hours Left</TableCell>
-                    <TableCell>Status</TableCell>
+                    <TableCell>
+                      <TableSortLabel
+                        active={needsTrainingSortBy === 'name'}
+                        direction={needsTrainingSortBy === 'name' ? needsTrainingSortDir : 'asc'}
+                        onClick={() => handleNeedsTrainingSort('name')}
+                      >
+                        Name
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell>
+                      <TableSortLabel
+                        active={needsTrainingSortBy === 'location'}
+                        direction={needsTrainingSortBy === 'location' ? needsTrainingSortDir : 'asc'}
+                        onClick={() => handleNeedsTrainingSort('location')}
+                      >
+                        Location
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell align="right">
+                      <TableSortLabel
+                        active={needsTrainingSortBy === 'hoursLeft'}
+                        direction={needsTrainingSortBy === 'hoursLeft' ? needsTrainingSortDir : 'asc'}
+                        onClick={() => handleNeedsTrainingSort('hoursLeft')}
+                      >
+                        Hours Left
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell>
+                      <TableSortLabel
+                        active={needsTrainingSortBy === 'status'}
+                        direction={needsTrainingSortBy === 'status' ? needsTrainingSortDir : 'asc'}
+                        onClick={() => handleNeedsTrainingSort('status')}
+                      >
+                        Status
+                      </TableSortLabel>
+                    </TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {stats.employeesNeedingTraining
+                  {sortedEmployeesNeedingTraining
                     .map((emp) => {
                       const getStatusColor = () => {
                         if (emp.status === 'complete') return '#4caf50'; // Green
@@ -755,53 +848,110 @@ const ManagerDashboard = () => {
 
         {/* Completed Trainings */}
         <Paper sx={{ p: 4, mt: 4 }}>
-          <Typography variant="h5" gutterBottom>
-            Completed Trainings {!isAllSites ? `(${locationFilters.join(', ')})` : ''}
-          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 2, mb: 2 }}>
+            <Typography variant="h5">
+              Completed Trainings {!isAllSites ? `(${locationFilters.join(', ')})` : ''}
+            </Typography>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', gap: 1 }}>
+              <FormControl size="small" sx={{ minWidth: 160 }}>
+                <InputLabel>Filter by Location</InputLabel>
+                <Select
+                  value={completedLocationFilter}
+                  label="Filter by Location"
+                  onChange={(e) => setCompletedLocationFilter(e.target.value)}
+                >
+                  <MenuItem value="all">All Locations</MenuItem>
+                  {allowedSites.map((site) => (
+                    <MenuItem key={site} value={site}>{site}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <IconButton
+                onClick={() => setCompletedSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+                title={completedSortDir === 'asc' ? 'Oldest first' : 'Newest first'}
+              >
+                {completedSortDir === 'asc' ? <ArrowUpwardIcon /> : <ArrowDownwardIcon />}
+              </IconButton>
+            </Stack>
+          </Box>
           {loading ? (
             <CircularProgress />
           ) : (
-            <List>
-              {completedSessions.length > 0 ? (
-                completedSessions.slice(0, 10).map((session) => (
-                  <ListItem key={session.id || `session-${session.topic}-${session.date}`}>
-                    <ListItemText
-                      primary={session.topic || session.name || 'Training Session'}
-                      secondary={`Date: ${session.date || 'N/A'}, Location: ${session.location || 'N/A'}, Trainees: ${session.trainees?.length || 0}`}
-                    />
-                  </ListItem>
-                ))
-              ) : (
-                <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
-                  No completed trainings found
-                </Typography>
-              )}
-            </List>
+            <Box sx={{ maxHeight: 360, overflowY: 'auto' }}>
+              <List>
+                {visibleCompletedSessions.length > 0 ? (
+                  visibleCompletedSessions.map((session) => (
+                    <ListItem key={session.id || `session-${session.topic}-${session.date}`}>
+                      <ListItemText
+                        primary={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                            {session.topic || session.name || 'Training Session'}
+                            {session.flaggedAsPossibleDuplicateOf && (
+                              <Tooltip title="Uploader was warned this looks like it might duplicate another session on the same date/location, and saved it anyway — worth a second look.">
+                                <Chip size="small" color="warning" icon={<WarningIcon />} label="Possible duplicate" />
+                              </Tooltip>
+                            )}
+                          </Box>
+                        }
+                        secondary={`Date: ${session.date || 'N/A'}, Location: ${session.location || 'N/A'}, Trainees: ${session.trainees?.length || 0}`}
+                      />
+                    </ListItem>
+                  ))
+                ) : (
+                  <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
+                    No completed trainings found
+                  </Typography>
+                )}
+              </List>
+            </Box>
           )}
         </Paper>
 
         {/* Recent Check-Ins */}
         <Paper sx={{ p: 4, mt: 4 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h5" gutterBottom>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 2, mb: 2 }}>
+            <Typography variant="h5">
               Recent Check-Ins {!isAllSites ? `(${locationFilters.join(', ')})` : ''}
             </Typography>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', gap: 1 }}>
+              <FormControl size="small" sx={{ minWidth: 160 }}>
+                <InputLabel>Filter by Location</InputLabel>
+                <Select
+                  value={checkInsLocationFilter}
+                  label="Filter by Location"
+                  onChange={(e) => setCheckInsLocationFilter(e.target.value)}
+                >
+                  <MenuItem value="all">All Locations</MenuItem>
+                  {allowedSites.map((site) => (
+                    <MenuItem key={site} value={site}>{site}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <IconButton
+                onClick={() => setCheckInsSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+                title={checkInsSortDir === 'asc' ? 'Oldest first' : 'Newest first'}
+              >
+                {checkInsSortDir === 'asc' ? <ArrowUpwardIcon /> : <ArrowDownwardIcon />}
+              </IconButton>
+            </Stack>
           </Box>
-          <List>
-            {checkIns.slice(0, 10).map((checkIn) => (
-              <ListItem key={checkIn.id}>
-                <ListItemText
-                  primary={`${checkIn.name} (${checkIn.email})`}
-                  secondary={`Phone: ${checkIn.phone}, Location: ${checkIn.location}, Time: ${moment(checkIn.checkinTime).format('MM/DD/YYYY HH:mm')}`}
-                />
-              </ListItem>
-            ))}
-            {checkIns.length === 0 && (
-              <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
-                No check-ins found
-              </Typography>
-            )}
-          </List>
+          <Box sx={{ maxHeight: 360, overflowY: 'auto' }}>
+            <List>
+              {visibleCheckIns.map((checkIn) => (
+                <ListItem key={checkIn.id}>
+                  <ListItemText
+                    primary={`${checkIn.name} (${checkIn.email})`}
+                    secondary={`Phone: ${checkIn.phone}, Location: ${checkIn.location}, Time: ${moment(checkIn.checkinTime).format('MM/DD/YYYY HH:mm')}`}
+                  />
+                </ListItem>
+              ))}
+              {visibleCheckIns.length === 0 && (
+                <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
+                  No check-ins found
+                </Typography>
+              )}
+            </List>
+          </Box>
         </Paper>
       </Box>
     </Container>

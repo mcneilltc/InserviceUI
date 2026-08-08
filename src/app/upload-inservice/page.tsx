@@ -7,7 +7,7 @@ import {
   CircularProgress, Alert, Divider, Chip, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, IconButton,
   Select, MenuItem, FormControl, InputLabel, Snackbar, Checkbox,
-  Card, CardContent, CardMedia, Stack, Tooltip, LinearProgress,
+  Card, CardContent, CardMedia, Stack, Tooltip, LinearProgress, FormControlLabel,
 } from '@mui/material';
 import {
   CloudUpload as CloudUploadIcon,
@@ -91,6 +91,16 @@ export default function UploadInservicePage() {
   // Persisted copies of the uploaded sheet photos (Cloud Storage URLs),
   // returned by OCR extraction — carried through to the saved session.
   const [sheetImageUrls, setSheetImageUrls] = useState<string[]>([]);
+  // Content hashes of the uploaded photos, used server-side to block
+  // re-submitting the same sheet (accidentally or to double-dip hours) —
+  // carried through to /from-sheet the same way sheetImageUrls is.
+  const [sheetImageHashes, setSheetImageHashes] = useState<string[]>([]);
+  // Second-layer signal: an existing session sharing date/location and a
+  // trainer or topic — likely the same sheet photographed twice rather than
+  // the exact same file. Warned, not blocked; requires an explicit
+  // acknowledgment (below) before Save is enabled.
+  const [possibleDuplicate, setPossibleDuplicate] = useState<{ sessionId: string; date: string; location: string } | null>(null);
+  const [duplicateAcknowledged, setDuplicateAcknowledged] = useState(false);
 
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
@@ -106,6 +116,9 @@ export default function UploadInservicePage() {
     setSaved(false);
     setSaveErrors([]);
     setSheetImageUrls([]);
+    setSheetImageHashes([]);
+    setPossibleDuplicate(null);
+    setDuplicateAcknowledged(false);
   }, []);
 
   const removePage = (index: number) => {
@@ -136,6 +149,9 @@ export default function UploadInservicePage() {
 
       setLookups(data.lookups);
       setSheetImageUrls(Array.isArray(data.sheetImageUrls) ? data.sheetImageUrls : []);
+      setSheetImageHashes(Array.isArray(data.sheetImageHashes) ? data.sheetImageHashes : []);
+      setPossibleDuplicate(data.possibleDuplicate || null);
+      setDuplicateAcknowledged(false);
 
       const { extracted, matched } = data;
 
@@ -239,6 +255,16 @@ export default function UploadInservicePage() {
       return;
     }
 
+    if (possibleDuplicate && !duplicateAcknowledged) {
+      setSnackbar({
+        open: true,
+        message: 'Please confirm this is not a duplicate before saving (see the warning above).',
+        severity: 'error',
+      });
+      setSaving(false);
+      return;
+    }
+
     if (form.trainers.length === 0) {
       setSnackbar({ open: true, message: 'Please select at least one trainer before saving', severity: 'error' });
       setSaving(false);
@@ -325,6 +351,8 @@ export default function UploadInservicePage() {
           name: e.matchedName,
         })),
         sheetImageUrls,
+        sheetImageHashes,
+        flaggedAsPossibleDuplicateOf: possibleDuplicate?.sessionId || null,
       });
     } catch (err: any) {
       errors.push(err.response?.data?.error?.message || err.message || 'Failed to save session');
@@ -464,6 +492,23 @@ export default function UploadInservicePage() {
 
             {form && (
               <>
+                {possibleDuplicate && (
+                  <Alert severity="warning" sx={{ mb: 2 }}>
+                    <Typography variant="body2" sx={{ mb: 1 }}>
+                      This looks similar to an existing session on {possibleDuplicate.date} at {possibleDuplicate.location} — same
+                      date and location, and a matching trainer or topic. If this is a different, legitimate session, confirm below to continue.
+                    </Typography>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={duplicateAcknowledged}
+                          onChange={(e) => setDuplicateAcknowledged(e.target.checked)}
+                        />
+                      }
+                      label="This is not a duplicate — save it anyway"
+                    />
+                  </Alert>
+                )}
                 <Grid container spacing={2}>
                   {/* Trainers */}
                   <Grid size={{ xs: 12, sm: 6 }}>
@@ -747,7 +792,7 @@ export default function UploadInservicePage() {
                   color="success"
                   startIcon={saving ? <CircularProgress size={18} color="inherit" /> : <SaveIcon />}
                   onClick={handleSave}
-                  disabled={saving || saved}
+                  disabled={saving || saved || (!!possibleDuplicate && !duplicateAcknowledged)}
                   sx={{ mt: 3, fontWeight: 700 }}
                 >
                   {saving ? 'Saving sessions…' : `Save ${form.employees.filter(e => e.matchedId).length} Training Session(s)`}
