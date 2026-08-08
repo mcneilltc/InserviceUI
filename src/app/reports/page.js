@@ -21,23 +21,83 @@ import {
   TableRow,
   TableCell,
   Button,
+  Tabs,
+  Tab,
+  Chip,
+  Stack,
 } from '@mui/material';
+import { FileDownload as FileDownloadIcon } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterMoment } from '@mui/x-date-pickers/AdapterMoment';
 import axios from 'axios';
 import moment from 'moment';
 
+const REPORT_TYPES = [
+  { value: 'checkins', label: 'Check-Ins' },
+  { value: 'hours', label: 'Employee Hours' },
+  { value: 'completed', label: 'Completed Trainings' },
+];
+
+const STATUS_LABELS = { complete: 'Complete', atRisk: 'At Risk', incomplete: 'Incomplete', exempt: 'Exempt' };
+const STATUS_COLORS = { complete: 'success', atRisk: 'warning', incomplete: 'error', exempt: 'default' };
+
+// Column definitions per report type — shared by both the on-screen table and
+// the CSV export, so the two can never drift out of sync with each other.
+const COLUMNS = {
+  checkins: [
+    { key: 'name', label: 'Name' },
+    { key: 'email', label: 'Email' },
+    { key: 'phone', label: 'Phone' },
+    { key: 'workSite', label: 'Work Site' },
+    { key: 'checkinTime', label: 'Check-in Time', format: (v) => (v ? moment(v).format('MMM D, YYYY h:mm A') : '') },
+    { key: 'trainingHoursCompleted', label: 'Training Hours Completed' },
+  ],
+  hours: [
+    { key: 'name', label: 'Name' },
+    { key: 'email', label: 'Email' },
+    { key: 'location', label: 'Location' },
+    { key: 'totalHours', label: 'Total Hours' },
+    { key: 'requiredHours', label: 'Required Hours' },
+    { key: 'hoursLeft', label: 'Hours Left' },
+    { key: 'status', label: 'Status', format: (v) => STATUS_LABELS[v] || v },
+  ],
+  completed: [
+    { key: 'date', label: 'Date' },
+    { key: 'location', label: 'Location' },
+    { key: 'topicsDisplay', label: 'Topics' },
+    { key: 'trainerNames', label: 'Trainer(s)' },
+    { key: 'traineeCount', label: 'Trainees' },
+  ],
+};
+
+function toCsv(reportType, rows) {
+  const columns = COLUMNS[reportType];
+  const headerLine = columns.map((c) => c.label).join(',');
+  const lines = rows.map((row) =>
+    columns.map((c) => {
+      const raw = c.format ? c.format(row[c.key]) : row[c.key];
+      return `"${String(raw ?? '').replace(/"/g, '""')}"`;
+    }).join(',')
+  );
+  return [headerLine, ...lines].join('\n');
+}
+
 const Reports = () => {
-  // State for filters — these match what routes/reports.ts actually supports
+  const [reportType, setReportType] = useState('checkins');
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
   const [nameFilter, setNameFilter] = useState('');
-  const [workSite, setWorkSite] = useState('');
+  // 'all' (not '') so the Select always has a real, non-empty value — an
+  // empty-string value needs displayEmpty to show anything at all, and MUI's
+  // label-shrink logic doesn't treat displayEmpty as "has a value", so the
+  // "Work Site" label never floats out of the way and sits on top of "All Sites".
+  const [workSite, setWorkSite] = useState('all');
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState([]);
   const [error, setError] = useState('');
   const [LOCATIONS, setLOCATIONS] = useState([]);
+  const [employeesById, setEmployeesById] = useState({});
   // Distinguishes "haven't generated a report yet" from "generated one and it
   // came back empty" — without this, an empty result renders nothing at all,
   // which looks identical to the button silently failing.
@@ -47,30 +107,88 @@ const Reports = () => {
     axios.get('/api/sites')
       .then((res) => setLOCATIONS(res.data.map((s) => s.name)))
       .catch((err) => console.error('Failed to load sites:', err));
+    // Needed to resolve trainer IDs to names for the Completed Trainings report.
+    axios.get('/api/employees')
+      .then((res) => {
+        const byId = {};
+        (res.data || []).forEach((emp) => { byId[emp.id] = emp.name; });
+        setEmployeesById(byId);
+      })
+      .catch((err) => console.error('Failed to load employees:', err));
   }, []);
+
+  const handleReportTypeChange = (event, newValue) => {
+    setReportType(newValue);
+    setReportData([]);
+    setHasSearched(false);
+    setError('');
+  };
 
   // Fetch report data based on selected criteria
   const fetchReportData = async () => {
     setLoading(true);
     setError('');
     try {
-      const response = await axios.get('/api/reports', {
-        params: {
-          startDate: startDate ? startDate.format('YYYY-MM-DD') : undefined,
-          endDate: endDate ? endDate.format('YYYY-MM-DD') : undefined,
-          name: nameFilter || undefined,
-          workSite: workSite || undefined,
-        },
-      });
-      setReportData(response.data);
+      const commonParams = {
+        startDate: startDate ? startDate.format('YYYY-MM-DD') : undefined,
+        endDate: endDate ? endDate.format('YYYY-MM-DD') : undefined,
+        // Backend already treats a literal 'all' the same as an absent filter.
+        workSite,
+      };
+
+      let rows;
+      if (reportType === 'checkins') {
+        const { data } = await axios.get('/api/reports', {
+          params: { ...commonParams, name: nameFilter || undefined },
+        });
+        rows = data;
+      } else if (reportType === 'hours') {
+        const { data } = await axios.get('/api/reports/hours', { params: commonParams });
+        rows = data;
+      } else {
+        const { data } = await axios.get('/api/sessions', {
+          params: { ...commonParams, status: 'completed' },
+        });
+        rows = data.map((session) => ({
+          ...session,
+          topicsDisplay: Array.isArray(session.topics) ? session.topics.join(', ') : (session.topic || ''),
+          trainerNames: (Array.isArray(session.trainer) ? session.trainer : [session.trainer])
+            .filter(Boolean)
+            .map((id) => employeesById[id] || id)
+            .join(', '),
+          traineeCount: session.trainees?.length || 0,
+        }));
+      }
+
+      setReportData(rows);
       setHasSearched(true);
     } catch (err) {
       console.error('Error fetching report data:', err);
-      setError('Failed to fetch report data.');
+      setError(err.response?.data?.error?.message || 'Failed to fetch report data.');
     } finally {
       setLoading(false);
     }
   };
+
+  const handleDownload = () => {
+    const csv = toCsv(reportType, reportData);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${reportType}_report_${moment().format('YYYY-MM-DD')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const columns = COLUMNS[reportType];
+  const emptyStateMessage = {
+    checkins: 'No check-ins found for these filters.',
+    hours: 'No employees found for these filters.',
+    completed: 'No completed trainings found for these filters.',
+  }[reportType];
 
   return (
     <Container maxWidth="lg">
@@ -78,6 +196,13 @@ const Reports = () => {
         <Typography variant="h4" component="h1" gutterBottom>
           Reports
         </Typography>
+
+        <Tabs value={reportType} onChange={handleReportTypeChange} sx={{ mb: 3 }}>
+          {REPORT_TYPES.map((t) => (
+            <Tab key={t.value} value={t.value} label={t.label} />
+          ))}
+        </Tabs>
+
         <Grid container spacing={2} sx={{ mb: 4 }}>
           {/* Date Range Filters */}
           <Grid size={{ xs: 12, md: 6 }}>
@@ -101,15 +226,17 @@ const Reports = () => {
             </LocalizationProvider>
           </Grid>
 
-          {/* Name Filter */}
-          <Grid size={{ xs: 12, md: 6 }}>
-            <TextField
-              fullWidth
-              label="Name"
-              value={nameFilter}
-              onChange={(e) => setNameFilter(e.target.value)}
-            />
-          </Grid>
+          {/* Name Filter — only meaningful for the Check-Ins report */}
+          {reportType === 'checkins' && (
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                fullWidth
+                label="Name"
+                value={nameFilter}
+                onChange={(e) => setNameFilter(e.target.value)}
+              />
+            </Grid>
+          )}
 
           {/* Work Site Filter */}
           <Grid size={{ xs: 12, md: 6 }}>
@@ -119,9 +246,8 @@ const Reports = () => {
                 value={workSite}
                 label="Work Site"
                 onChange={(e) => setWorkSite(e.target.value)}
-                displayEmpty
               >
-                <MenuItem value="">All Sites</MenuItem>
+                <MenuItem value="all">All Sites</MenuItem>
                 {LOCATIONS.map((location) => (
                   <MenuItem key={location} value={location}>
                     {location}
@@ -154,38 +280,52 @@ const Reports = () => {
 
         {/* Report Table */}
         {reportData.length > 0 && (
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Email</TableCell>
-                  <TableCell>Phone</TableCell>
-                  <TableCell>Work Site</TableCell>
-                  <TableCell>Check-in Time</TableCell>
-                  <TableCell>Training Hours Completed</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {reportData.map((checkin, index) => (
-                  <TableRow key={`${checkin.email}-${checkin.checkinTime}-${index}`}>
-                    <TableCell>{checkin.name}</TableCell>
-                    <TableCell>{checkin.email}</TableCell>
-                    <TableCell>{checkin.phone}</TableCell>
-                    <TableCell>{checkin.workSite}</TableCell>
-                    <TableCell>{checkin.checkinTime ? moment(checkin.checkinTime).format('MMM D, YYYY h:mm A') : ''}</TableCell>
-                    <TableCell>{checkin.trainingHoursCompleted}</TableCell>
+          <>
+            <Stack direction="row" justifyContent="flex-end" sx={{ mb: 1 }}>
+              <Button
+                variant="outlined"
+                startIcon={<FileDownloadIcon />}
+                onClick={handleDownload}
+              >
+                Download CSV
+              </Button>
+            </Stack>
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    {columns.map((c) => (
+                      <TableCell key={c.key}>{c.label}</TableCell>
+                    ))}
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                </TableHead>
+                <TableBody>
+                  {reportData.map((row, index) => (
+                    <TableRow key={row.id || `${reportType}-${index}`}>
+                      {columns.map((c) => {
+                        if (reportType === 'hours' && c.key === 'status') {
+                          return (
+                            <TableCell key={c.key}>
+                              <Chip size="small" label={STATUS_LABELS[row.status] || row.status} color={STATUS_COLORS[row.status] || 'default'} />
+                            </TableCell>
+                          );
+                        }
+                        return (
+                          <TableCell key={c.key}>{c.format ? c.format(row[c.key]) : row[c.key]}</TableCell>
+                        );
+                      })}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </>
         )}
 
         {/* Empty state — distinct from "haven't searched yet" so a filter
             combination with zero matches doesn't look like the button did nothing */}
         {hasSearched && !loading && !error && reportData.length === 0 && (
-          <Alert severity="info">No check-ins found for these filters.</Alert>
+          <Alert severity="info">{emptyStateMessage}</Alert>
         )}
       </Paper>
     </Container>
