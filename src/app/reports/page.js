@@ -38,6 +38,10 @@ const Reports = () => {
   const [reportData, setReportData] = useState([]);
   const [error, setError] = useState('');
   const [LOCATIONS, setLOCATIONS] = useState([]);
+  // Distinguishes "haven't generated a report yet" from "generated one and it
+  // came back empty" — without this, an empty result renders nothing at all,
+  // which looks identical to the button silently failing.
+  const [hasSearched, setHasSearched] = useState(false);
 
   useEffect(() => {
     axios.get('/api/sites')
@@ -59,6 +63,7 @@ const Reports = () => {
         },
       });
       setReportData(response.data);
+      setHasSearched(true);
     } catch (err) {
       console.error('Error fetching report data:', err);
       setError('Failed to fetch report data.');
@@ -114,6 +119,7 @@ const Reports = () => {
                 value={workSite}
                 label="Work Site"
                 onChange={(e) => setWorkSite(e.target.value)}
+                displayEmpty
               >
                 <MenuItem value="">All Sites</MenuItem>
                 {LOCATIONS.map((location) => (
@@ -174,6 +180,12 @@ const Reports = () => {
               </TableBody>
             </Table>
           </TableContainer>
+        )}
+
+        {/* Empty state — distinct from "haven't searched yet" so a filter
+            combination with zero matches doesn't look like the button did nothing */}
+        {hasSearched && !loading && !error && reportData.length === 0 && (
+          <Alert severity="info">No check-ins found for these filters.</Alert>
         )}
       </Paper>
     </Container>
