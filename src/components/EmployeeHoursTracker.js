@@ -24,12 +24,14 @@ const BACKEND_URL = ''; // relative — proxied through next.config.mjs's rewrit
 const EmployeeHoursTracker = ({ allowedLocations } = {}) => {
   const [employees, setEmployees] = useState([]);
   const [allSites, setAllSites] = useState([]);
+  const [hoursThisMonthById, setHoursThisMonthById] = useState({});
   const locations = allowedLocations && allowedLocations.length ? allowedLocations : allSites;
   const [selectedLocation, setSelectedLocation] = useState('all');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     fetchEmployees();
+    fetchHoursThisMonth();
     if (!allowedLocations || allowedLocations.length === 0) {
       axios.get(`${BACKEND_URL}/api/sites`)
         .then((res) => setAllSites(res.data.map((s) => s.name)))
@@ -50,22 +52,22 @@ const EmployeeHoursTracker = ({ allowedLocations } = {}) => {
     }
   };
 
-  const getEmployeeHours = async (employeeId) => {
+  // /api/compliance/status already computes each active employee's hours
+  // scoped to a single calendar month (defaults to the current one) by
+  // summing their trainingSessions within that date range — unlike
+  // emp.totalHours on the employee record, which is a running lifetime total
+  // and previously made every employee look "Complete" once historical hours
+  // (e.g. from a bulk Excel import) pushed their all-time total past 4.
+  const fetchHoursThisMonth = async () => {
     try {
-      // Get all training sessions for this employee
-      const response = await axios.get(`${BACKEND_URL}/api/training-sessions/employee/${employeeId}`);
-      const sessions = response.data || [];
-      
-      // Calculate total hours (sessions store length in minutes)
-      let totalMinutes = 0;
-      sessions.forEach(session => {
-        totalMinutes += parseFloat(session.length || 0);
+      const response = await axios.get(`${BACKEND_URL}/api/compliance/status`);
+      const byId = {};
+      (response.data?.allEmployees || []).forEach((emp) => {
+        byId[emp.id] = emp.hoursThisMonth;
       });
-      
-      return totalMinutes / 60; // Convert to hours
+      setHoursThisMonthById(byId);
     } catch (error) {
-      console.error('Error fetching employee hours:', error);
-      return 0;
+      console.error('Error fetching this month\'s hours:', error);
     }
   };
 
@@ -97,14 +99,12 @@ const EmployeeHoursTracker = ({ allowedLocations } = {}) => {
     return 'Incomplete';
   };
 
-  // For now, we'll use totalHours from employee data if available
-  // In a full implementation, you'd fetch hours for each employee
   const employeesWithHours = filteredEmployees.map(emp => {
-    const totalHours = emp.totalHours || 0;
+    const totalHours = hoursThisMonthById[emp.id] ?? 0;
     const requiredHours = 4;
     const hoursLeft = Math.max(0, requiredHours - totalHours);
     const status = getEmployeeStatus(totalHours);
-    
+
     return {
       ...emp,
       totalHours,
