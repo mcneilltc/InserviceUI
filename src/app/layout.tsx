@@ -24,8 +24,35 @@ const clientSideEmotionCache = createCache({ key: "css" });
 const PUBLIC_PREFIXES = ['/employee', '/checkin'];
 const PUBLIC_EXACT = ['/', '/login'];
 
+// React Query defaults to staleTime: 0 and refetchOnWindowFocus: true, which
+// means every page (re)mount and every tab-refocus re-fetches from the API
+// even when nothing has changed — the opposite of a cache. Since every
+// mutation in this app already calls queryClient.invalidateQueries() on the
+// relevant key (see manage-employees, manage-sites, manage-topics, etc.),
+// data becomes fresh the moment a real write happens; there's no need to
+// also re-fetch on a timer/refocus. A generous staleTime turns "visit two
+// pages that both need /api/employees" or "tab away and back" from two
+// Firestore reads into one, which is what was blowing through the daily
+// read quota.
+//
+// gcTime must stay comfortably above staleTime: staleTime only matters while
+// a query's data is still in the cache, and gcTime is what controls whether
+// it's still there at all once every component using it has unmounted (e.g.
+// navigating Manage Employees -> Reports -> back). Set it too low and a
+// longer staleTime never gets the chance to matter for anyone who navigated
+// away for a few minutes.
+const queryClientConfig = {
+  defaultOptions: {
+    queries: {
+      staleTime: 10 * 60 * 1000, // 10 minutes
+      gcTime: 30 * 60 * 1000, // 30 minutes
+      refetchOnWindowFocus: false,
+    },
+  },
+};
+
 export default function RootLayout({ children }) {
-  const [queryClient] = useState(() => new QueryClient());
+  const [queryClient] = useState(() => new QueryClient(queryClientConfig));
   const pathname = usePathname();
   const isEmployeePortal = pathname?.startsWith('/employee');
   const isPublicPath = PUBLIC_EXACT.includes(pathname || '') || PUBLIC_PREFIXES.some((p) => pathname?.startsWith(p));

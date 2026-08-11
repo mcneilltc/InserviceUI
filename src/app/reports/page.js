@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Container,
   Paper,
@@ -32,6 +32,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterMoment } from '@mui/x-date-pickers/AdapterMoment';
 import axios from 'axios';
 import moment from 'moment';
+import { useQuery } from '@tanstack/react-query';
 
 const REPORT_TYPES = [
   { value: 'checkins', label: 'Check-Ins' },
@@ -96,26 +97,35 @@ const Reports = () => {
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState([]);
   const [error, setError] = useState('');
-  const [LOCATIONS, setLOCATIONS] = useState([]);
-  const [employeesById, setEmployeesById] = useState({});
   // Distinguishes "haven't generated a report yet" from "generated one and it
   // came back empty" — without this, an empty result renders nothing at all,
   // which looks identical to the button silently failing.
   const [hasSearched, setHasSearched] = useState(false);
 
-  useEffect(() => {
-    axios.get('/api/sites')
-      .then((res) => setLOCATIONS(res.data.map((s) => s.name)))
-      .catch((err) => console.error('Failed to load sites:', err));
-    // Needed to resolve trainer IDs to names for the Completed Trainings report.
-    axios.get('/api/employees')
-      .then((res) => {
-        const byId = {};
-        (res.data || []).forEach((emp) => { byId[emp.id] = emp.name; });
-        setEmployeesById(byId);
-      })
-      .catch((err) => console.error('Failed to load employees:', err));
-  }, []);
+  // Shared ['sites']/['employees'] query keys — same ones Manage Employees,
+  // Manage Sites, etc. use, so navigating between those pages and this one
+  // reuses the already-cached data instead of hitting the API again.
+  const { data: LOCATIONS = [] } = useQuery({
+    queryKey: ['sites'],
+    queryFn: async () => {
+      const res = await axios.get('/api/sites');
+      return res.data.map((s) => s.name);
+    },
+  });
+
+  // Needed to resolve trainer IDs to names for the Completed Trainings report.
+  const { data: employeesById = {} } = useQuery({
+    queryKey: ['employees'],
+    queryFn: async () => {
+      const response = await axios.get('/api/employees');
+      return response.data.map((emp) => ({ ...emp, locations: emp.locations || [] }));
+    },
+    select: (employees) => {
+      const byId = {};
+      employees.forEach((emp) => { byId[emp.id] = emp.name; });
+      return byId;
+    },
+  });
 
   const handleReportTypeChange = (event, newValue) => {
     setReportType(newValue);

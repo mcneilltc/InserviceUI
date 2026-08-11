@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Paper,
   Typography,
@@ -17,59 +17,23 @@ import {
   TableRow,
   Chip,
 } from '@mui/material';
-import axios from 'axios';
 
-const BACKEND_URL = ''; // relative — proxied through next.config.mjs's rewrite so the session cookie is same-origin, not third-party
-
-const EmployeeHoursTracker = ({ allowedLocations } = {}) => {
-  const [employees, setEmployees] = useState([]);
-  const [allSites, setAllSites] = useState([]);
-  const [hoursThisMonthById, setHoursThisMonthById] = useState({});
+// employees, hoursThisMonthById, and allSites are fetched once by the parent
+// dashboard (which already needs the same /api/employees, /api/compliance/status,
+// and /api/sites data for its own roster/compliance views) and passed down
+// here as props instead of this component independently re-fetching them.
+// /api/compliance/status in particular does a full per-employee subcollection
+// scan on the backend, so fetching it a second time on the same page load
+// was needlessly doubling an already-expensive read.
+const EmployeeHoursTracker = ({
+  allowedLocations,
+  employees = [],
+  hoursThisMonthById = {},
+  allSites = [],
+  loading = false,
+} = {}) => {
   const locations = allowedLocations && allowedLocations.length ? allowedLocations : allSites;
   const [selectedLocation, setSelectedLocation] = useState('all');
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    fetchEmployees();
-    fetchHoursThisMonth();
-    if (!allowedLocations || allowedLocations.length === 0) {
-      axios.get(`${BACKEND_URL}/api/sites`)
-        .then((res) => setAllSites(res.data.map((s) => s.name)))
-        .catch((err) => console.error('Failed to load sites:', err));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const fetchEmployees = async () => {
-    try {
-      setLoading(true);
-      const response = await axios.get(`${BACKEND_URL}/api/employees`);
-      setEmployees(response.data);
-    } catch (error) {
-      console.error('Error fetching employees:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // /api/compliance/status already computes each active employee's hours
-  // scoped to a single calendar month (defaults to the current one) by
-  // summing their trainingSessions within that date range — unlike
-  // emp.totalHours on the employee record, which is a running lifetime total
-  // and previously made every employee look "Complete" once historical hours
-  // (e.g. from a bulk Excel import) pushed their all-time total past 4.
-  const fetchHoursThisMonth = async () => {
-    try {
-      const response = await axios.get(`${BACKEND_URL}/api/compliance/status`);
-      const byId = {};
-      (response.data?.allEmployees || []).forEach((emp) => {
-        byId[emp.id] = emp.hoursThisMonth;
-      });
-      setHoursThisMonthById(byId);
-    } catch (error) {
-      console.error('Error fetching this month\'s hours:', error);
-    }
-  };
 
   // Roster is scoped by home location — an employee's home base, not the
   // (possibly multi-site) `locations` field they're generally assigned to.
@@ -130,7 +94,7 @@ const EmployeeHoursTracker = ({ allowedLocations } = {}) => {
           </Select>
         </FormControl>
       </Box>
-      
+
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
           <Typography>Loading...</Typography>
@@ -156,8 +120,8 @@ const EmployeeHoursTracker = ({ allowedLocations } = {}) => {
                     <TableCell align="right">{emp.totalHours ? emp.totalHours.toFixed(1) : '0.0'}</TableCell>
                     <TableCell align="right">{emp.hoursLeft ? emp.hoursLeft.toFixed(1) : '0.0'}</TableCell>
                     <TableCell>
-                      <Chip 
-                        label={getStatusLabel(emp.status)} 
+                      <Chip
+                        label={getStatusLabel(emp.status)}
                         size="small"
                         color={
                           emp.status === 'complete' ? 'success' :
