@@ -332,6 +332,14 @@ const ManagerDashboard = () => {
     return needsTrainingSortDir === 'asc' ? diff : -diff;
   });
 
+  // Derived from the complianceData this page already fetches — handed to
+  // EmployeeHoursTracker as a prop instead of it independently re-fetching
+  // /api/compliance/status (an expensive full-roster subcollection scan).
+  const hoursThisMonthById = {};
+  (complianceData?.allEmployees || []).forEach((emp) => {
+    hoursThisMonthById[emp.id] = emp.hoursThisMonth;
+  });
+
   return (
     <Container maxWidth="lg">
       <Box sx={{ py: 4 }}>
@@ -785,6 +793,10 @@ const ManagerDashboard = () => {
               ? allowedSites
               : (!isAllSites ? locationFilters : null)
           }
+          employees={employees}
+          hoursThisMonthById={hoursThisMonthById}
+          allSites={allSites}
+          loading={loading || complianceLoading}
         />
 
         {/* Completed Trainings */}

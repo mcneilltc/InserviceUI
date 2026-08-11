@@ -1,7 +1,7 @@
 // @ts-nocheck
 'use client';
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   Box, Button, Dialog, DialogTitle, DialogContent, DialogActions,
   Typography, Table, TableBody, TableCell, TableContainer, TableHead,
@@ -18,6 +18,7 @@ import {
 } from '@mui/icons-material';
 import * as XLSX from 'xlsx';
 import axios from 'axios';
+import { useQuery } from '@tanstack/react-query';
 
 const BACKEND_URL = ''; // relative — proxied through next.config.mjs's rewrite so the session cookie is same-origin, not third-party
 
@@ -109,7 +110,6 @@ export default function ImportEmployeesDialog({ open, onClose, onImportComplete 
   const [importing, setImporting] = useState(false);
   const [importResults, setImportResults] = useState<{ success: number; skipped: string[]; hoursCredited: number } | null>(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
-  const [knownSitesByKey, setKnownSitesByKey] = useState<Map<string, string>>(new Map());
   const [unrecognizedSites, setUnrecognizedSites] = useState<string[]>([]);
 
   // Which of the up-to-12 month-hours columns the user actually mapped —
@@ -119,20 +119,25 @@ export default function ImportEmployeesDialog({ open, onClose, onImportComplete 
   const mappedMonthNumbers = Array.from({ length: MAX_HISTORICAL_MONTHS }, (_, i) => i + 1)
     .filter((n) => mappedMonthValues.has(monthField(n)));
 
-  // Loaded once per time the dialog opens, so Site values can be matched
-  // against what's actually in Manage Sites (see resolveSite above).
-  useEffect(() => {
-    if (!open) return;
-    axios.get(`${BACKEND_URL}/api/sites`)
-      .then(({ data }) => {
-        const map = new Map<string, string>();
-        (data || []).forEach((s: any) => {
-          if (s?.name) map.set(normalizeSiteKey(s.name), s.name);
-        });
-        setKnownSitesByKey(map);
-      })
-      .catch(() => setKnownSitesByKey(new Map()));
-  }, [open]);
+  // Same ['sites'] query key the parent Manage Employees page (and Manage
+  // Sites) already use, so opening this dialog reuses the cached site list
+  // instead of re-fetching it — matched against Site values from the sheet
+  // (see resolveSite above).
+  const { data: knownSitesByKey = new Map<string, string>() } = useQuery({
+    queryKey: ['sites'],
+    queryFn: async () => {
+      const response = await axios.get(`${BACKEND_URL}/api/sites`);
+      return response.data.map((s: any) => s.name);
+    },
+    select: (siteNames: string[]) => {
+      const map = new Map<string, string>();
+      siteNames.forEach((name) => {
+        if (name) map.set(normalizeSiteKey(name), name);
+      });
+      return map;
+    },
+    enabled: open,
+  });
 
   const handleFileUpload = (file: File) => {
     const reader = new FileReader();
