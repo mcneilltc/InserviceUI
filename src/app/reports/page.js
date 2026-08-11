@@ -152,10 +152,15 @@ const Reports = () => {
         rows = data.map((session) => ({
           ...session,
           topicsDisplay: Array.isArray(session.topics) ? session.topics.join(', ') : (session.topic || ''),
-          trainerNames: (Array.isArray(session.trainer) ? session.trainer : [session.trainer])
-            .filter(Boolean)
-            .map((id) => employeesById[id] || id)
-            .join(', '),
+          // A bulk-imported record's trainer is the literal placeholder
+          // 'Imported', not a real trainer ID — show who actually uploaded
+          // it instead, when that's on record.
+          trainerNames: session.trainer === 'Imported'
+            ? (session.createdBy?.name ? `Imported by ${session.createdBy.name}` : 'Imported')
+            : (Array.isArray(session.trainer) ? session.trainer : [session.trainer])
+                .filter(Boolean)
+                .map((id) => employeesById[id] || id)
+                .join(', '),
           traineeCount: session.trainees?.length || 0,
         }));
       }
