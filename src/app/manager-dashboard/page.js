@@ -740,30 +740,18 @@ const ManagerDashboard = () => {
                 <TableBody>
                   {sortedEmployeesNeedingTraining
                     .map((emp) => {
-                      const getStatusColor = () => {
-                        if (emp.status === 'complete') return '#4caf50'; // Green
-                        if (emp.status === 'atRisk') return '#ffeb3b'; // Yellow
-                        return '#f44336'; // Red
-                      };
-                      
                       const getStatusLabel = () => {
                         if (emp.status === 'complete') return 'Complete';
                         if (emp.status === 'atRisk') return 'At Risk';
                         return 'Incomplete';
                       };
-                      
+
                       return (
-                        <TableRow 
-                          key={emp.id}
-                          sx={{
-                            bgcolor: getStatusColor(),
-                            '&:hover': { bgcolor: getStatusColor(), opacity: 0.8 }
-                          }}
-                        >
+                        <TableRow key={emp.id} hover>
                           <TableCell>
                             <Typography
                               component="span"
-                              sx={{ cursor: 'pointer', textDecoration: 'underline', fontWeight: 600, color: 'inherit' }}
+                              sx={{ cursor: 'pointer', textDecoration: 'underline', fontWeight: 600 }}
                               onClick={() => router.push(`/manage-employees/${emp.id}`)}
                             >
                               {emp.name}
