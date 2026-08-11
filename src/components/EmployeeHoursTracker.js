@@ -87,12 +87,6 @@ const EmployeeHoursTracker = ({ allowedLocations } = {}) => {
     return 'incomplete';
   };
 
-  const getStatusColor = (status) => {
-    if (status === 'complete') return '#4caf50'; // Green
-    if (status === 'atRisk') return '#ffeb3b'; // Yellow
-    return '#f44336'; // Red
-  };
-
   const getStatusLabel = (status) => {
     if (status === 'complete') return 'Complete';
     if (status === 'atRisk') return 'At Risk';
@@ -156,13 +150,7 @@ const EmployeeHoursTracker = ({ allowedLocations } = {}) => {
             <TableBody>
               {employeesWithHours.length > 0 ? (
                 employeesWithHours.map((emp) => (
-                  <TableRow 
-                    key={emp.id}
-                    sx={{
-                      bgcolor: getStatusColor(emp.status),
-                      '&:hover': { bgcolor: getStatusColor(emp.status), opacity: 0.8 }
-                    }}
-                  >
+                  <TableRow key={emp.id} hover>
                     <TableCell>{emp.name}</TableCell>
                     <TableCell>{emp.homeLocation || 'Unknown'}</TableCell>
                     <TableCell align="right">{emp.totalHours ? emp.totalHours.toFixed(1) : '0.0'}</TableCell>
