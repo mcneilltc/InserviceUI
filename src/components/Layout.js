@@ -68,8 +68,14 @@ const ALL_MENU_ITEMS = [
   // { text: 'Shifts', icon: <EventAvailableIcon />, path: '/shifts', roles: ['employee'] },
 ];
 
+const SIDEBAR_OPEN_STORAGE_KEY = 'sidebarOpen';
+
 const Layout = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Desktop sidebar defaults open; the actual saved preference is read from
+  // localStorage after mount (see the mounted-gated effect below) so it
+  // doesn't cause a server/client hydration mismatch.
+  const [desktopOpen, setDesktopOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
   const theme = useTheme();
   const { mode, systemMode, setMode } = useColorScheme();
@@ -80,10 +86,20 @@ const Layout = ({ children }) => {
 
   useEffect(() => {
     setMounted(true);
+    const stored = localStorage.getItem(SIDEBAR_OPEN_STORAGE_KEY);
+    if (stored !== null) setDesktopOpen(stored === 'true');
   }, []);
 
+  useEffect(() => {
+    if (mounted) localStorage.setItem(SIDEBAR_OPEN_STORAGE_KEY, String(desktopOpen));
+  }, [desktopOpen, mounted]);
+
   const handleDrawerToggle = () => {
-    setMobileOpen(!mobileOpen);
+    if (isMobile) {
+      setMobileOpen((prev) => !prev);
+    } else {
+      setDesktopOpen((prev) => !prev);
+    }
   };
 
   const resolvedMode = mode === 'system' ? systemMode : mode;
@@ -126,19 +142,23 @@ const Layout = ({ children }) => {
         color="inherit"
         elevation={1}
         sx={{
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          ml: { sm: `${drawerWidth}px` },
+          width: { sm: desktopOpen ? `calc(100% - ${drawerWidth}px)` : '100%' },
+          ml: { sm: desktopOpen ? `${drawerWidth}px` : 0 },
           bgcolor: 'background.paper',
           color: 'text.primary',
+          transition: theme.transitions.create(['width', 'margin'], {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.leavingScreen,
+          }),
         }}
       >
         <Toolbar>
           <IconButton
             color="inherit"
-            aria-label="open drawer"
+            aria-label="toggle navigation"
             edge="start"
             onClick={handleDrawerToggle}
-            sx={{ mr: 2, display: { sm: 'none' } }}
+            sx={{ mr: 2 }}
           >
             <MenuIcon />
           </IconButton>
@@ -166,7 +186,14 @@ const Layout = ({ children }) => {
       </AppBar>
       <Box
         component="nav"
-        sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
+        sx={{
+          width: { sm: desktopOpen ? drawerWidth : 0 },
+          flexShrink: { sm: 0 },
+          transition: theme.transitions.create('width', {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.leavingScreen,
+          }),
+        }}
       >
         {isMobile ? (
           <Drawer
@@ -185,12 +212,12 @@ const Layout = ({ children }) => {
           </Drawer>
         ) : (
           <Drawer
-            variant="permanent"
+            variant="persistent"
+            open={desktopOpen}
             sx={{
               display: { xs: 'none', sm: 'block' },
               '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
             }}
-            open
           >
             {drawer}
           </Drawer>
@@ -202,8 +229,12 @@ const Layout = ({ children }) => {
           flexGrow: 1,
           minWidth: 0, // flex items default to min-width:auto, which lets content refuse to shrink and overflow the viewport instead of wrapping
           p: 3,
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
+          width: { sm: desktopOpen ? `calc(100% - ${drawerWidth}px)` : '100%' },
           mt: '64px', // Height of AppBar
+          transition: theme.transitions.create('width', {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.leavingScreen,
+          }),
         }}
       >
         {children}
