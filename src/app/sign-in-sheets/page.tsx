@@ -111,7 +111,7 @@ export default function SignInSheetsPage() {
     <Container maxWidth="lg">
       <Typography variant="h4" gutterBottom>Sign-In Sheets</Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Uploaded sign-in sheet photos, organized by the training's date.
+        Uploaded sign-in sheet photos, organized by the training&apos;s date.
       </Typography>
 
       {isLoading && <CircularProgress />}
