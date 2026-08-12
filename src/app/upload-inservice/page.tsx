@@ -88,12 +88,13 @@ export default function UploadInservicePage() {
   // The editable review form
   const [form, setForm] = useState<FormState | null>(null);
 
-  // Persisted copies of the uploaded sheet photos (Cloud Storage URLs),
-  // returned by OCR extraction — carried through to the saved session.
-  const [sheetImageUrls, setSheetImageUrls] = useState<string[]>([]);
+  // Persisted copies of the uploaded sheet photos (private R2 object keys —
+  // not directly viewable; the session's images route mints a signed URL on
+  // demand), returned by OCR extraction — carried through to the saved session.
+  const [sheetImageKeys, setSheetImageKeys] = useState<string[]>([]);
   // Content hashes of the uploaded photos, used server-side to block
   // re-submitting the same sheet (accidentally or to double-dip hours) —
-  // carried through to /from-sheet the same way sheetImageUrls is.
+  // carried through to /from-sheet the same way sheetImageKeys is.
   const [sheetImageHashes, setSheetImageHashes] = useState<string[]>([]);
   // Second-layer signal: an existing session sharing date/location and a
   // trainer or topic — likely the same sheet photographed twice rather than
@@ -148,7 +149,7 @@ export default function UploadInservicePage() {
       });
 
       setLookups(data.lookups);
-      setSheetImageUrls(Array.isArray(data.sheetImageUrls) ? data.sheetImageUrls : []);
+      setSheetImageKeys(Array.isArray(data.sheetImageKeys) ? data.sheetImageKeys : []);
       setSheetImageHashes(Array.isArray(data.sheetImageHashes) ? data.sheetImageHashes : []);
       setPossibleDuplicate(data.possibleDuplicate || null);
       setDuplicateAcknowledged(false);
@@ -350,7 +351,7 @@ export default function UploadInservicePage() {
           employeeId: e.matchedId,
           name: e.matchedName,
         })),
-        sheetImageUrls,
+        sheetImageKeys,
         sheetImageHashes,
         flaggedAsPossibleDuplicateOf: possibleDuplicate?.sessionId || null,
       });
