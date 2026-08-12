@@ -1,6 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import moment from 'moment';
 import {
   Paper,
   Typography,
@@ -22,35 +24,30 @@ import axios from 'axios';
 const BACKEND_URL = ''; // relative — proxied through next.config.mjs's rewrite so the session cookie is same-origin, not third-party
 
 const EmployeeHoursTracker = ({ allowedLocations } = {}) => {
-  const [employees, setEmployees] = useState([]);
-  const [allSites, setAllSites] = useState([]);
-  const [hoursThisMonthById, setHoursThisMonthById] = useState({});
-  const locations = allowedLocations && allowedLocations.length ? allowedLocations : allSites;
   const [selectedLocation, setSelectedLocation] = useState('all');
-  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    fetchEmployees();
-    fetchHoursThisMonth();
-    if (!allowedLocations || allowedLocations.length === 0) {
-      axios.get(`${BACKEND_URL}/api/sites`)
-        .then((res) => setAllSites(res.data.map((s) => s.name)))
-        .catch((err) => console.error('Failed to load sites:', err));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Same queryKeys as manager-dashboard/page.js (and add-training/
+  // trainer-dashboard for 'employees') — when this renders alongside the
+  // dashboard, which already fetches both, these resolve from cache instead
+  // of firing duplicate requests.
+  const { data: employees = [], isLoading: loading } = useQuery({
+    queryKey: ['employees'],
+    queryFn: async () => {
+      const { data } = await axios.get(`${BACKEND_URL}/api/employees`);
+      return data;
+    },
+  });
 
-  const fetchEmployees = async () => {
-    try {
-      setLoading(true);
-      const response = await axios.get(`${BACKEND_URL}/api/employees`);
-      setEmployees(response.data);
-    } catch (error) {
-      console.error('Error fetching employees:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const needsSites = !allowedLocations || allowedLocations.length === 0;
+  const { data: allSites = [] } = useQuery({
+    queryKey: ['sites'],
+    queryFn: async () => {
+      const { data } = await axios.get(`${BACKEND_URL}/api/sites`);
+      return data.map((s) => s.name);
+    },
+    enabled: needsSites,
+  });
+  const locations = allowedLocations && allowedLocations.length ? allowedLocations : allSites;
 
   // /api/compliance/status already computes each active employee's hours
   // scoped to a single calendar month (defaults to the current one) by
@@ -58,18 +55,21 @@ const EmployeeHoursTracker = ({ allowedLocations } = {}) => {
   // emp.totalHours on the employee record, which is a running lifetime total
   // and previously made every employee look "Complete" once historical hours
   // (e.g. from a bulk Excel import) pushed their all-time total past 4.
-  const fetchHoursThisMonth = async () => {
-    try {
-      const response = await axios.get(`${BACKEND_URL}/api/compliance/status`);
-      const byId = {};
-      (response.data?.allEmployees || []).forEach((emp) => {
-        byId[emp.id] = emp.hoursThisMonth;
-      });
-      setHoursThisMonthById(byId);
-    } catch (error) {
-      console.error('Error fetching this month\'s hours:', error);
-    }
-  };
+  // Keyed by the current calendar month (not a prop) since that's always
+  // what this component shows — this happens to match manager-dashboard's
+  // own ['compliance-status', month] query whenever its filter is on the
+  // current month too (the default), so the two share cache in that case.
+  const { data: complianceData } = useQuery({
+    queryKey: ['compliance-status', moment().format('YYYY-MM')],
+    queryFn: async () => {
+      const { data } = await axios.get(`${BACKEND_URL}/api/compliance/status`);
+      return data;
+    },
+  });
+  const hoursThisMonthById = {};
+  (complianceData?.allEmployees || []).forEach((emp) => {
+    hoursThisMonthById[emp.id] = emp.hoursThisMonth;
+  });
 
   // Roster is scoped by home location — an employee's home base, not the
   // (possibly multi-site) `locations` field they're generally assigned to.

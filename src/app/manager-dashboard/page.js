@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Container,
   Paper,
@@ -46,6 +46,7 @@ import { Download as DownloadIcon, FileDownload as FileDownloadIcon, Warning as 
 import { Chart as ChartJS, ArcElement, Tooltip as ChartTooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
 import { useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import EmployeeHoursTracker from '../../components/EmployeeHoursTracker';
 import { useAuth } from '../../components/AuthContext';
 
@@ -57,24 +58,6 @@ const ManagerDashboard = () => {
   const router = useRouter();
   const { user } = useAuth();
   const isScopedSupervisor = user?.role === 'supervisor' && user?.supervisorScope === 'locations';
-
-  const [allSites, setAllSites] = useState([]);
-  useEffect(() => {
-    axios.get(`${BACKEND_URL}/api/sites`)
-      .then((res) => setAllSites(res.data.map((s) => s.name)))
-      .catch((err) => console.error('Failed to load sites:', err));
-  }, []);
-
-  const allowedSites = isScopedSupervisor && user.supervisorLocations?.length ? user.supervisorLocations : allSites;
-
-  const [employees, setEmployees] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [stats, setStats] = useState(null);
-  const [checkIns, setCheckIns] = useState([]);
-  const [completedSessions, setCompletedSessions] = useState([]);
-  const [complianceData, setComplianceData] = useState(null);
-  const [complianceLoading, setComplianceLoading] = useState(false);
 
   // Local filter/sort just for the Completed Trainings and Recent Check-Ins
   // lists — independent of the page-wide location filter above, which also
@@ -118,6 +101,22 @@ const ManagerDashboard = () => {
   // below ('midMonth' | 'needsNotice'), or null when the dialog is closed.
   const [openAlert, setOpenAlert] = useState(null);
 
+  // Sites/employees/sessions use the same queryKeys as add-training,
+  // trainer-dashboard, and EmployeeHoursTracker — whichever page fetched
+  // first, the rest reuse that cached data instead of refetching it (see the
+  // queryClient staleTime comment in app/layout.tsx for why that matters:
+  // this dashboard used to re-fire ~6 uncached requests on every mount, plus
+  // 3 more duplicated ones from EmployeeHoursTracker).
+  const { data: allSites = [] } = useQuery({
+    queryKey: ['sites'],
+    queryFn: async () => {
+      const { data } = await axios.get(`${BACKEND_URL}/api/sites`);
+      return data.map((s) => s.name);
+    },
+  });
+
+  const allowedSites = isScopedSupervisor && user.supervisorLocations?.length ? user.supervisorLocations : allSites;
+
   // Roster/home-location scoping — the security-relevant check, always
   // enforced for a scoped supervisor regardless of what locationFilters means
   // for them right now.
@@ -127,129 +126,123 @@ const ManagerDashboard = () => {
     return true;
   };
 
-  useEffect(() => {
-    fetchEmployees();
-    fetchStats();
-    fetchCheckIns();
-    fetchCompletedSessions();
-    fetchComplianceStatus();
+  const { data: employees = [], isError: employeesError } = useQuery({
+    queryKey: ['employees'],
+    queryFn: async () => {
+      const { data } = await axios.get(`${BACKEND_URL}/api/employees`);
+      return data;
+    },
+  });
+
+  const { data: allSessions = [] } = useQuery({
+    queryKey: ['sessions'],
+    queryFn: async () => {
+      const { data } = await axios.get(`${BACKEND_URL}/api/sessions`);
+      return data;
+    },
+  });
+
+  const completedSessions = useMemo(() => {
+    let completed = allSessions.filter((s) => s.status === 'completed');
+    if (!isAllSites) {
+      completed = completed.filter((s) => locationFilters.includes(s.location));
+    } else if (isScopedSupervisor) {
+      completed = completed.filter((s) => allowedSites.includes(s.location));
+    }
+    return completed;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [locationFilters, period, startDate, endDate]);
+  }, [allSessions, isAllSites, locationFilters, isScopedSupervisor, allowedSites.join(',')]);
 
-  const fetchCompletedSessions = async () => {
-    try {
-      const response = await axios.get(`${BACKEND_URL}/api/sessions`);
-      let completed = response.data.filter(s => s.status === 'completed');
-
-      if (!isAllSites) {
-        completed = completed.filter(s => locationFilters.includes(s.location));
-      } else if (isScopedSupervisor) {
-        completed = completed.filter(s => allowedSites.includes(s.location));
-      }
-
-      setCompletedSessions(completed);
-    } catch (error) {
-      console.error('Error fetching completed sessions:', error);
-      setCompletedSessions([]);
-    }
-  };
-
-  const fetchEmployees = async () => {
-    try {
-      const response = await axios.get(`${BACKEND_URL}/api/employees`);
-      setEmployees(response.data);
-    } catch (error) {
-      console.error('Error fetching employees:', error);
-      setError('Failed to fetch employees');
-    }
-  };
-
-  const fetchStats = async () => {
-    try {
-      setLoading(true);
+  const {
+    data: stats = null,
+    isLoading: loading,
+    isError: statsError,
+  } = useQuery({
+    // Scoped supervisor: locationFilters narrows by training location(s).
+    // All-site supervisor: locationFilters narrows the roster by home site(s).
+    queryKey: [
+      'dashboard-stats',
+      period,
+      period === 'custom' ? startDate.toISOString() : null,
+      period === 'custom' ? endDate.toISOString() : null,
+      isScopedSupervisor,
+      isAllSites ? null : locationFilters.join(','),
+    ],
+    queryFn: async () => {
       const params = {
         period: period !== 'custom' ? period : undefined,
         startDate: period === 'custom' ? startDate.toISOString() : undefined,
         endDate: period === 'custom' ? endDate.toISOString() : undefined,
-        // Scoped supervisor: locationFilters narrows by training location(s).
-        // All-site supervisor: locationFilters narrows the roster by home site(s).
         workSite: isScopedSupervisor && !isAllSites ? locationFilters.join(',') : undefined,
         homeSite: !isScopedSupervisor && !isAllSites ? locationFilters.join(',') : undefined,
       };
+      const { data } = await axios.get(`${BACKEND_URL}/api/dashboard/stats`, { params });
+      return data;
+    },
+  });
 
-      const response = await axios.get(`${BACKEND_URL}/api/dashboard/stats`, { params });
-      setStats(response.data);
-    } catch (error) {
-      console.error('Error fetching stats:', error);
-      setError('Failed to fetch statistics');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const error = employeesError ? 'Failed to fetch employees' : statsError ? 'Failed to fetch statistics' : null;
 
-  const fetchComplianceStatus = async () => {
-    try {
-      setComplianceLoading(true);
-      const params = {
-        month: startDate.format('YYYY-MM'),
-      };
-      const response = await axios.get(`${BACKEND_URL}/api/compliance/status`, { params });
-      let data = response.data;
+  const { data: rawComplianceData = null, isLoading: complianceLoading } = useQuery({
+    queryKey: ['compliance-status', startDate.format('YYYY-MM')],
+    queryFn: async () => {
+      const { data } = await axios.get(`${BACKEND_URL}/api/compliance/status`, {
+        params: { month: startDate.format('YYYY-MM') },
+      });
+      return data;
+    },
+  });
 
-      // This endpoint doesn't support site filtering server-side — scope it
-      // here by home location, for a location-limited supervisor or an
-      // all-site supervisor who's picked a home site to view.
-      if (data) {
-        const scopedEmployees = data.allEmployees.filter(e => inHomeScope(e.location));
-        const scopedBySite = Object.fromEntries(
-          Object.entries(data.bySite).filter(([site]) => inHomeScope(site))
-        );
-        const compliantCount = scopedEmployees.filter(e => e.status === 'compliant').length;
-        data = {
-          ...data,
-          allEmployees: scopedEmployees,
-          bySite: scopedBySite,
-          overall: {
-            total: scopedEmployees.length,
-            compliant: compliantCount,
-            partial: scopedEmployees.filter(e => e.status === 'partial').length,
-            atRisk: scopedEmployees.filter(e => e.status === 'at_risk').length,
-            zero: scopedEmployees.filter(e => e.status === 'zero').length,
-            percentCompliant: scopedEmployees.length > 0 ? Math.round((compliantCount / scopedEmployees.length) * 100) : 0,
-          },
-          alerts: {
-            midMonth: data.alerts.midMonth.filter(e => inHomeScope(e.location)),
-            needsNotice: data.alerts.needsNotice.filter(e => inHomeScope(e.location)),
-            endOfMonth: data.alerts.endOfMonth.filter(e => inHomeScope(e.location)),
-          },
-        };
-      }
+  // This endpoint doesn't support site filtering server-side — scope it here
+  // by home location, for a location-limited supervisor or an all-site
+  // supervisor who's picked a home site to view. Kept separate from the
+  // query itself since this scoping depends on filter state that shouldn't
+  // trigger a refetch of unchanged server data.
+  const complianceData = useMemo(() => {
+    const data = rawComplianceData;
+    if (!data) return null;
 
-      setComplianceData(data);
-    } catch (error) {
-      console.error('Error fetching compliance status:', error);
-    } finally {
-      setComplianceLoading(false);
-    }
-  };
+    const scopedEmployees = data.allEmployees.filter((e) => inHomeScope(e.location));
+    const scopedBySite = Object.fromEntries(
+      Object.entries(data.bySite).filter(([site]) => inHomeScope(site))
+    );
+    const compliantCount = scopedEmployees.filter((e) => e.status === 'compliant').length;
+    return {
+      ...data,
+      allEmployees: scopedEmployees,
+      bySite: scopedBySite,
+      overall: {
+        total: scopedEmployees.length,
+        compliant: compliantCount,
+        partial: scopedEmployees.filter((e) => e.status === 'partial').length,
+        atRisk: scopedEmployees.filter((e) => e.status === 'at_risk').length,
+        zero: scopedEmployees.filter((e) => e.status === 'zero').length,
+        percentCompliant: scopedEmployees.length > 0 ? Math.round((compliantCount / scopedEmployees.length) * 100) : 0,
+      },
+      alerts: {
+        midMonth: data.alerts.midMonth.filter((e) => inHomeScope(e.location)),
+        needsNotice: data.alerts.needsNotice.filter((e) => inHomeScope(e.location)),
+        endOfMonth: data.alerts.endOfMonth.filter((e) => inHomeScope(e.location)),
+      },
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawComplianceData, isScopedSupervisor, isAllSites, locationFilters, allowedSites.join(',')]);
 
-  const fetchCheckIns = async () => {
-    try {
-      // The backend already scopes by the checked-in employee's home
-      // location (never trust client-side filtering for this). `location`
-      // narrows by where training happened (scoped supervisor's use case);
-      // `homeSite` narrows the roster itself (all-site supervisor's use case).
+  const { data: checkIns = [] } = useQuery({
+    // The backend already scopes by the checked-in employee's home location
+    // (never trust client-side filtering for this). `location` narrows by
+    // where training happened (scoped supervisor's use case); `homeSite`
+    // narrows the roster itself (all-site supervisor's use case).
+    queryKey: ['checkins', isScopedSupervisor, isAllSites ? null : locationFilters.join(',')],
+    queryFn: async () => {
       const params = {
         location: isScopedSupervisor && !isAllSites ? locationFilters.join(',') : undefined,
         homeSite: !isScopedSupervisor && !isAllSites ? locationFilters.join(',') : undefined,
       };
-      const response = await axios.get(`${BACKEND_URL}/api/checkin`, { params });
-      setCheckIns(response.data || []);
-    } catch (error) {
-      console.error('Error fetching check-ins:', error);
-      setCheckIns([]);
-    }
-  };
+      const { data } = await axios.get(`${BACKEND_URL}/api/checkin`, { params });
+      return data || [];
+    },
+  });
 
   const handleDateChange = (newValue, setter) => {
     if (newValue && moment.isMoment(newValue)) {
