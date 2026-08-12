@@ -17,6 +17,7 @@ const ROUTE_PERMISSIONS = [
   { prefix: '/manage-incentives', roles: ['supervisor'] },
   { prefix: '/add-training', roles: ['supervisor', 'trainer'] },
   { prefix: '/upload-inservice', roles: ['supervisor', 'trainer'] },
+  { prefix: '/sign-in-sheets', roles: ['supervisor', 'trainer'] },
   { prefix: '/reports', roles: ['supervisor', 'trainer'] },
   // When I Work integration commented out of production for now — see
   // components/Layout.js for the matching nav-entry comment.
