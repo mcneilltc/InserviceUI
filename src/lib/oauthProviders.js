@@ -48,7 +48,7 @@ export function redirectToYahoo(email) {
     client_id: process.env.NEXT_PUBLIC_YAHOO_CLIENT_ID || '',
     redirect_uri: redirectUri,
     response_type: 'code',
-    scope: 'openid email profile',
+    scope: 'openid email',
     state,
     ...(email ? { login_hint: email } : {}),
   });
