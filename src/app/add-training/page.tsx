@@ -50,6 +50,8 @@ import {
   ExpandMore as ExpandMoreIcon,
   Download as DownloadIcon,
   FilterList as FilterListIcon,
+  QrCode2 as QrCodeIcon,
+  ContentCopy as ContentCopyIcon,
 } from "@mui/icons-material";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
@@ -148,6 +150,7 @@ const AddTraining = () => {
     employeeId: '',
   });
   const [selectedSessionForManualAdd, setSelectedSessionForManualAdd] = useState(null);
+  const [qrDialogSession, setQrDialogSession] = useState(null);
 
   // Generate time options (every 30 minutes from 8 AM to 6 PM)
   const timeOptions = Array.from({ length: 21 }, (_, i) => {
@@ -984,10 +987,17 @@ const AddTraining = () => {
 
                   <ListItemSecondaryAction>
                     <Box sx={{ display: "flex", gap: 1 }}>
-                      <QRCodeCanvas
-                        value={`${window.location.origin}/checkin/${session.id}`}
-                        size={64}
-                      />
+                      {session.status !== "completed" &&
+                        session.status !== "cancelled" && (
+                          <Tooltip title="Show Check-In QR Code">
+                            <IconButton
+                              edge="end"
+                              onClick={() => setQrDialogSession(session)}
+                            >
+                              <QrCodeIcon />
+                            </IconButton>
+                          </Tooltip>
+                        )}
                       {session.status !== "completed" &&
                         session.status !== "cancelled" && (
                           <>
@@ -1047,6 +1057,44 @@ const AddTraining = () => {
             ))}
         </List>
       </Paper>
+
+      {/* Check-In QR Code */}
+      <Dialog open={!!qrDialogSession} onClose={() => setQrDialogSession(null)}>
+        <DialogTitle>Check-In QR Code</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, py: 1 }}>
+            <Typography variant="body2" color="text.secondary" align="center">
+              {(qrDialogSession?.topics || (qrDialogSession?.topic ? [qrDialogSession.topic] : [])).join(', ')}
+              {qrDialogSession?.date ? ` — ${qrDialogSession.date}` : ''}
+            </Typography>
+            {qrDialogSession && (
+              <QRCodeCanvas
+                value={`${window.location.origin}/checkin/${qrDialogSession.id}`}
+                size={240}
+              />
+            )}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, maxWidth: 320 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ wordBreak: "break-all" }}>
+                {qrDialogSession ? `${window.location.origin}/checkin/${qrDialogSession.id}` : ''}
+              </Typography>
+              <Tooltip title="Copy Link">
+                <IconButton
+                  size="small"
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/checkin/${qrDialogSession.id}`);
+                    setSnackbar({ open: true, message: "Check-in link copied", severity: "success" });
+                  }}
+                >
+                  <ContentCopyIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setQrDialogSession(null)}>Close</Button>
+        </DialogActions>
+      </Dialog>
 
       {/* New Topic Modal */}
       <Dialog
