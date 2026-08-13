@@ -6,14 +6,16 @@ export default async function handler(req, res) {
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
-  const { code, state } = req.query;
+  const { code, state, error, error_description } = req.query;
 
   if (!code) {
+    console.error('Yahoo OAuth callback returned no code:', { error, error_description });
     return res.status(400).send(`
       <html>
         <body>
           <h1>Authorization Error</h1>
           <p>Authorization code not provided. Please try again.</p>
+          ${error ? `<p><small>${error}${error_description ? `: ${error_description}` : ''}</small></p>` : ''}
           <script>
             setTimeout(() => window.location.href = '/login', 3000);
           </script>
