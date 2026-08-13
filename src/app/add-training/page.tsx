@@ -46,6 +46,7 @@ import {
   Add as AddIcon,
   Group as GroupIcon,
   Archive as ArchiveIcon,
+  Unarchive as UnarchiveIcon,
   Search as SearchIcon,
   ExpandMore as ExpandMoreIcon,
   Download as DownloadIcon,
@@ -63,6 +64,12 @@ import { useAuth } from "../../components/AuthContext";
 
 const BACKEND_URL = ''; // relative — proxied through next.config.mjs's rewrite so the session cookie is same-origin, not third-party
 import { QRCodeCanvas } from "qrcode.react";
+
+// Bumps each session-row action icon's touch target from MUI's default
+// ~40x40 to ~44x44 (WCAG 2.5.5 AA minimum) — these sit close together in a
+// row, so a few extra px per button meaningfully cuts down on mis-taps.
+const ACTION_BUTTON_SX = { p: 1.25 } as const;
+
 const AddTraining = () => {
   const { user } = useAuth();
   const isSupervisor = user?.role === 'supervisor';
@@ -151,6 +158,16 @@ const AddTraining = () => {
   });
   const [selectedSessionForManualAdd, setSelectedSessionForManualAdd] = useState(null);
   const [qrDialogSession, setQrDialogSession] = useState(null);
+  // A single confirm dialog reused for actions that are hard to undo (Archive,
+  // Cancel Training) — a safety net so a mis-tap among the tightly clustered
+  // action icons doesn't silently take effect.
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string;
+    message: string;
+    confirmLabel: string;
+    confirmColor?: "error" | "warning" | "primary";
+    onConfirm: () => void;
+  } | null>(null);
 
   // Generate time options (every 30 minutes from 8 AM to 6 PM)
   const timeOptions = Array.from({ length: 21 }, (_, i) => {
@@ -499,6 +516,28 @@ const AddTraining = () => {
       setSnackbar({
         open: true,
         message: "Failed to archive training",
+        severity: "error",
+      });
+    }
+  };
+
+  const handleUnarchiveTraining = async (sessionId) => {
+    try {
+      await axios.put(`${BACKEND_URL}/api/sessions/${sessionId}`, {
+        archived: false,
+      });
+      queryClient.invalidateQueries({ queryKey: ['sessions'] });
+
+      setSnackbar({
+        open: true,
+        message: "Training unarchived successfully!",
+        severity: "success",
+      });
+    } catch (error) {
+      console.error("Error unarchiving training:", error);
+      setSnackbar({
+        open: true,
+        message: "Failed to unarchive training",
         severity: "error",
       });
     }
@@ -948,8 +987,15 @@ const AddTraining = () => {
             })
             .map((session, index) => (
               <React.Fragment key={`session-${session.id || index}-${(session.topics || [session.topic]).join('-') || 'unknown'}-${session.date || 'nodate'}-${index}`}>
-                <ListItem>
+                <ListItem
+                  sx={{
+                    flexWrap: "wrap",
+                    alignItems: "flex-start",
+                    rowGap: 1,
+                  }}
+                >
                   <ListItemText
+                    sx={{ flex: "1 1 260px", minWidth: 0, pr: 2 }}
                     primary={
                       <Box
                         sx={{ display: "flex", alignItems: "center", gap: 1 }}
@@ -985,14 +1031,14 @@ const AddTraining = () => {
                     }
                   />
 
-                  <ListItemSecondaryAction>
-                    <Box sx={{ display: "flex", gap: 1 }}>
+                  <Box sx={{ display: "flex", gap: 1.5, flexShrink: 0 }}>
                       {session.status !== "completed" &&
                         session.status !== "cancelled" && (
                           <Tooltip title="Show Check-In QR Code">
                             <IconButton
                               edge="end"
                               onClick={() => setQrDialogSession(session)}
+                              sx={ACTION_BUTTON_SX}
                             >
                               <QrCodeIcon />
                             </IconButton>
@@ -1005,6 +1051,7 @@ const AddTraining = () => {
                               <IconButton
                                 edge="end"
                                 onClick={() => handleUpdateTrainees(session.id)}
+                                sx={ACTION_BUTTON_SX}
                               >
                                 <GroupIcon />
                               </IconButton>
@@ -1014,6 +1061,7 @@ const AddTraining = () => {
                                 edge="end"
                                 onClick={() => handleManualAddEmployee(session.id)}
                                 color="primary"
+                                sx={ACTION_BUTTON_SX}
                               >
                                 <AddIcon />
                               </IconButton>
@@ -1024,15 +1072,31 @@ const AddTraining = () => {
                                 onClick={() =>
                                   handleCompleteTraining(session.id)
                                 }
+                                sx={ACTION_BUTTON_SX}
                               >
                                 <CheckCircleIcon />
                               </IconButton>
                             </Tooltip>
+                            {/* Cancel is hard to undo, so it's set apart from
+                                the routine actions above (extra left margin)
+                                and requires confirming instead of firing
+                                immediately on click — the routine actions
+                                stay single-click since a mis-tap there just
+                                means redoing something harmless. */}
                             <Tooltip title="Cancel Training">
                               <IconButton
                                 edge="end"
-                                onClick={() => handleCancelTraining(session.id)}
+                                onClick={() =>
+                                  setConfirmDialog({
+                                    title: "Cancel this training?",
+                                    message: `This will mark "${(session.topics || [session.topic]).join(', ')}" on ${session.date} as cancelled. This can't be undone from here.`,
+                                    confirmLabel: "Cancel Training",
+                                    confirmColor: "error",
+                                    onConfirm: () => handleCancelTraining(session.id),
+                                  })
+                                }
                                 color="error"
+                                sx={{ ...ACTION_BUTTON_SX, ml: 1 }}
                               >
                                 <CancelIcon />
                               </IconButton>
@@ -1043,20 +1107,63 @@ const AddTraining = () => {
                         <Tooltip title="Archive Training">
                           <IconButton
                             edge="end"
-                            onClick={() => handleArchiveTraining(session.id)}
+                            onClick={() =>
+                              setConfirmDialog({
+                                title: "Archive this training?",
+                                message: `This will move "${(session.topics || [session.topic]).join(', ')}" on ${session.date} to the Archived tab. You can unarchive it later from there.`,
+                                confirmLabel: "Archive",
+                                confirmColor: "warning",
+                                onConfirm: () => handleArchiveTraining(session.id),
+                              })
+                            }
+                            color="warning"
+                            sx={ACTION_BUTTON_SX}
                           >
                             <ArchiveIcon />
                           </IconButton>
                         </Tooltip>
                       )}
-                    </Box>
-                  </ListItemSecondaryAction>
+                      {session.archived && (
+                        <Tooltip title="Unarchive Training">
+                          <IconButton
+                            edge="end"
+                            onClick={() => handleUnarchiveTraining(session.id)}
+                            sx={ACTION_BUTTON_SX}
+                          >
+                            <UnarchiveIcon />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                  </Box>
                 </ListItem>
                 <Divider />
               </React.Fragment>
             ))}
         </List>
       </Paper>
+
+      {/* Shared confirmation for hard-to-undo actions (Cancel, Archive) */}
+      <Dialog open={!!confirmDialog} onClose={() => setConfirmDialog(null)}>
+        <DialogTitle>{confirmDialog?.title}</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            {confirmDialog?.message}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDialog(null)}>Never Mind</Button>
+          <Button
+            variant="contained"
+            color={confirmDialog?.confirmColor || "primary"}
+            onClick={() => {
+              confirmDialog?.onConfirm();
+              setConfirmDialog(null);
+            }}
+          >
+            {confirmDialog?.confirmLabel}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Check-In QR Code */}
       <Dialog open={!!qrDialogSession} onClose={() => setQrDialogSession(null)}>
