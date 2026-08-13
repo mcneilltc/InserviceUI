@@ -75,6 +75,10 @@ const ManageEmployees = () => {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  // The logged-in supervisor's own permission — gates the Add Hours dialog
+  // and the Excel import's historical-hours step. Missing/undefined (e.g.
+  // trainers, or a supervisor never explicitly restricted) defaults to allowed.
+  const canAddManualHours = user?.canAddManualHours !== false;
   const [openDialog, setOpenDialog] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [formData, setFormData] = useState({
@@ -92,6 +96,7 @@ const ManageEmployees = () => {
     supervisorScope: 'locations',
     isTrainer: false,
     isExemptFromHoursRequirement: false,
+    canAddManualHours: true,
   });
   const [activeTab, setActiveTab] = useState(0);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
@@ -239,6 +244,7 @@ const ManageEmployees = () => {
         supervisorScope: employee.supervisorScope || 'locations',
         isTrainer: employee.isTrainer || false,
         isExemptFromHoursRequirement: employee.isExemptFromHoursRequirement || false,
+        canAddManualHours: employee.canAddManualHours !== false,
       });
     } else {
       setEditingEmployee(null);
@@ -256,6 +262,7 @@ const ManageEmployees = () => {
         supervisorScope: 'locations',
         isTrainer: false,
         isExemptFromHoursRequirement: false,
+        canAddManualHours: true,
       });
     }
     setOpenDialog(true);
@@ -278,6 +285,7 @@ const ManageEmployees = () => {
       supervisorScope: 'locations',
       isTrainer: false,
       isExemptFromHoursRequirement: false,
+      canAddManualHours: true,
     });
   };
 
@@ -725,6 +733,9 @@ const ManageEmployees = () => {
                       {employee.isExemptFromHoursRequirement && (
                         <Chip label="Hours-exempt" size="small" variant="outlined" />
                       )}
+                      {employee.isSupervisor && employee.canAddManualHours === false && (
+                        <Chip label="No manual hours" size="small" variant="outlined" color="warning" />
+                      )}
                       {!employee.isSupervisor && !employee.isTrainer && '—'}
                     </Box>
                   </TableCell>
@@ -735,9 +746,11 @@ const ManageEmployees = () => {
                         <IconButton onClick={() => handleOpenDialog(employee)} title="Edit">
                           <EditIcon />
                         </IconButton>
-                        <IconButton onClick={() => handleOpenAddHoursDialog(employee)} title="Add Hours">
-                          <MoreTimeIcon />
-                        </IconButton>
+                        {canAddManualHours && (
+                          <IconButton onClick={() => handleOpenAddHoursDialog(employee)} title="Add Hours">
+                            <MoreTimeIcon />
+                          </IconButton>
+                        )}
                         <IconButton onClick={() => handleArchive(employee)} title="Archive">
                           <ArchiveIcon />
                         </IconButton>
@@ -928,6 +941,19 @@ const ManageEmployees = () => {
                   />
                 </Grid>
               )}
+              {formData.isSupervisor && (
+                <Grid size={12}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={formData.canAddManualHours}
+                        onChange={(e) => setFormData({ ...formData, canAddManualHours: e.target.checked })}
+                      />
+                    }
+                    label="Can manually add hours (Add Hours button and Excel import historical hours)"
+                  />
+                </Grid>
+              )}
               <Grid size={12}>
                 <FormControlLabel
                   control={
@@ -1106,6 +1132,7 @@ const ManageEmployees = () => {
         open={openImportDialog}
         onClose={() => setOpenImportDialog(false)}
         onImportComplete={() => queryClient.invalidateQueries({ queryKey: ['employees'] })}
+        canAddManualHours={canAddManualHours}
       />
     </Container>
   );

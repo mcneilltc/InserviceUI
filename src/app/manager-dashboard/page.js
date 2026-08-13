@@ -36,17 +36,18 @@ import {
   IconButton,
   TableSortLabel,
   Tooltip,
+  Snackbar,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterMoment } from '@mui/x-date-pickers/AdapterMoment';
 import axios from 'axios';
 import moment from 'moment';
-import { Download as DownloadIcon, FileDownload as FileDownloadIcon, Warning as WarningIcon, Error as ErrorIcon, CheckCircle as CheckCircleIcon, ArrowUpward as ArrowUpwardIcon, ArrowDownward as ArrowDownwardIcon } from '@mui/icons-material';
+import { Download as DownloadIcon, FileDownload as FileDownloadIcon, Warning as WarningIcon, Error as ErrorIcon, CheckCircle as CheckCircleIcon, ArrowUpward as ArrowUpwardIcon, ArrowDownward as ArrowDownwardIcon, Send as SendIcon } from '@mui/icons-material';
 import { Chart as ChartJS, ArcElement, Tooltip as ChartTooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
 import { useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import EmployeeHoursTracker from '../../components/EmployeeHoursTracker';
 import { useAuth } from '../../components/AuthContext';
 
@@ -100,6 +101,24 @@ const ManagerDashboard = () => {
   // Which compliance alert's employee list is currently open in the dialog
   // below ('midMonth' | 'needsNotice'), or null when the dialog is closed.
   const [openAlert, setOpenAlert] = useState(null);
+  const [letterSnackbar, setLetterSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
+  const sendLetterMutation = useMutation({
+    mutationFn: (employeeId) => axios.post(`/api/compliance/letter/${employeeId}/send`),
+    onSuccess: (res) => {
+      setLetterSnackbar({ open: true, message: res.data?.message || 'Compliance letter sent.', severity: 'success' });
+    },
+    onError: (err) => {
+      const message = err.response?.data?.error?.message || 'Failed to send the compliance letter.';
+      setLetterSnackbar({ open: true, message, severity: 'error' });
+    },
+  });
+
+  const handleSendComplianceLetter = (employee) => {
+    if (window.confirm(`Send a compliance letter to ${employee.name}?`)) {
+      sendLetterMutation.mutate(employee.id);
+    }
+  };
 
   // Sites/employees/sessions use the same queryKeys as add-training and
   // trainer-dashboard — visiting one of those pages first means this
@@ -749,13 +768,28 @@ const ManagerDashboard = () => {
                       return (
                         <TableRow key={emp.id} hover>
                           <TableCell>
-                            <Typography
-                              component="span"
-                              sx={{ cursor: 'pointer', textDecoration: 'underline', fontWeight: 600 }}
-                              onClick={() => router.push(`/manage-employees/${emp.id}`)}
-                            >
-                              {emp.name}
-                            </Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              <Typography
+                                component="span"
+                                sx={{ cursor: 'pointer', textDecoration: 'underline', fontWeight: 600 }}
+                                onClick={() => router.push(`/manage-employees/${emp.id}`)}
+                              >
+                                {emp.name}
+                              </Typography>
+                              {emp.status !== 'complete' && (
+                                <Tooltip title="Send Compliance Letter">
+                                  <span>
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => handleSendComplianceLetter(emp)}
+                                      disabled={sendLetterMutation.isPending && sendLetterMutation.variables === emp.id}
+                                    >
+                                      <SendIcon fontSize="small" />
+                                    </IconButton>
+                                  </span>
+                                </Tooltip>
+                              )}
+                            </Box>
                           </TableCell>
                           <TableCell>{emp.location}</TableCell>
                           <TableCell align="right">{emp.hoursLeft ? emp.hoursLeft.toFixed(1) : '0.0'}</TableCell>
@@ -899,6 +933,19 @@ const ManagerDashboard = () => {
           </Box>
         </Paper>
       </Box>
+      <Snackbar
+        open={letterSnackbar.open}
+        autoHideDuration={5000}
+        onClose={() => setLetterSnackbar((prev) => ({ ...prev, open: false }))}
+      >
+        <Alert
+          onClose={() => setLetterSnackbar((prev) => ({ ...prev, open: false }))}
+          severity={letterSnackbar.severity}
+          sx={{ width: '100%' }}
+        >
+          {letterSnackbar.message}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 };

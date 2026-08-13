@@ -44,6 +44,13 @@ const EmployeeHoursTracker = ({
     return selectedLocation === 'all' || emp.homeLocation === selectedLocation;
   });
 
+  // Mirrors the backend's certificationStatus.hasCertificationOnFile — a
+  // newly added/imported employee without one yet isn't held to the hour
+  // requirement, so it's checked here too rather than only trusting
+  // hoursThisMonthById to already have excluded them.
+  const hasCertificationOnFile = (emp) =>
+    Array.isArray(emp.certifications) && emp.certifications.some((c) => c && c.expirationDate);
+
   const getEmployeeStatus = (hours) => {
     const requiredHours = 4;
     if (hours >= requiredHours) return 'complete';
@@ -54,14 +61,16 @@ const EmployeeHoursTracker = ({
   const getStatusLabel = (status) => {
     if (status === 'complete') return 'Complete';
     if (status === 'atRisk') return 'At Risk';
+    if (status === 'pendingCertification') return 'Pending Certification';
     return 'Incomplete';
   };
 
   const employeesWithHours = filteredEmployees.map(emp => {
     const totalHours = hoursThisMonthById[emp.id] ?? 0;
     const requiredHours = 4;
-    const hoursLeft = Math.max(0, requiredHours - totalHours);
-    const status = getEmployeeStatus(totalHours);
+    const hasCert = hasCertificationOnFile(emp);
+    const hoursLeft = hasCert ? Math.max(0, requiredHours - totalHours) : 0;
+    const status = hasCert ? getEmployeeStatus(totalHours) : 'pendingCertification';
 
     return {
       ...emp,
@@ -125,7 +134,8 @@ const EmployeeHoursTracker = ({
                         size="small"
                         color={
                           emp.status === 'complete' ? 'success' :
-                          emp.status === 'atRisk' ? 'warning' : 'error'
+                          emp.status === 'atRisk' ? 'warning' :
+                          emp.status === 'pendingCertification' ? 'default' : 'error'
                         }
                       />
                     </TableCell>
