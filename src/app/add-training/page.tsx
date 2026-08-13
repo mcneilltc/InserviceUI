@@ -192,6 +192,39 @@ const AddTraining = () => {
     }));
   };
 
+  // Whichever topics are mandatory for the selected date's week (set in
+  // Manage Topics > Mandatory Topics Schedule) — locked into formData.topics
+  // below, can't be unchecked. Refetched whenever the date changes since a
+  // different date can fall in a different week/month.
+  const [mandatoryTopicsForWeek, setMandatoryTopicsForWeek] = useState<string[]>([]);
+  useEffect(() => {
+    if (!formData.date) {
+      setMandatoryTopicsForWeek([]);
+      return;
+    }
+    const dateStr = moment(formData.date).format('YYYY-MM-DD');
+    let cancelled = false;
+    axios.get('/api/mandatory-topics/for-date', { params: { date: dateStr } })
+      .then(({ data }) => {
+        if (!cancelled) setMandatoryTopicsForWeek(data.topics || []);
+      })
+      .catch(() => {
+        if (!cancelled) setMandatoryTopicsForWeek([]);
+      });
+    return () => { cancelled = true; };
+  }, [formData.date]);
+
+  // Auto-add any newly-mandatory topics as soon as they're known, so they're
+  // pre-selected without the trainer needing to touch the Topics field.
+  useEffect(() => {
+    if (mandatoryTopicsForWeek.length === 0) return;
+    setFormData((prev) => {
+      const merged = Array.from(new Set([...(prev.topics || []), ...mandatoryTopicsForWeek]));
+      if (merged.length === (prev.topics || []).length) return prev;
+      return { ...prev, topics: merged };
+    });
+  }, [mandatoryTopicsForWeek]);
+
   const handleTraineeChange = (employeeId) => (event) => {
     setSelectedTrainees((prev) => {
       if (event.target.checked) {
@@ -749,18 +782,36 @@ const AddTraining = () => {
                       setOpenNewTopicModal(true);
                       return;
                     }
-                    setFormData((prev) => ({ ...prev, topics: value }));
+                    // Mandatory topics can't be unchecked — re-union them back
+                    // in even if something managed to toggle one off, so the
+                    // MenuItem's `disabled` below is belt-and-suspenders, not
+                    // the only thing enforcing this.
+                    const withMandatory = Array.from(new Set([...value, ...mandatoryTopicsForWeek]));
+                    setFormData((prev) => ({ ...prev, topics: withMandatory }));
                   }}
                   renderValue={(selected) => (selected as string[]).join(", ")}
                 >
-                  {topics.map((topic: any, index) => (
-                    <MenuItem key={`topic-${index}-${topic.name}`} value={topic.name}>
-                      {topic.name}
-                    </MenuItem>
-                  ))}
+                  {topics.map((topic: any, index) => {
+                    const isMandatory = mandatoryTopicsForWeek.includes(topic.name);
+                    return (
+                      <MenuItem
+                        key={`topic-${index}-${topic.name}`}
+                        value={topic.name}
+                        disabled={isMandatory && (formData.topics ?? []).includes(topic.name)}
+                      >
+                        {topic.name}{isMandatory ? ' (mandatory)' : ''}
+                      </MenuItem>
+                    );
+                  })}
                   {isSupervisor && <MenuItem value="new">+ Add New Topic</MenuItem>}
                 </Select>
               </FormControl>
+              {mandatoryTopicsForWeek.length > 0 && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                  {mandatoryTopicsForWeek.join(', ')} {mandatoryTopicsForWeek.length === 1 ? 'is' : 'are'} mandatory
+                  this week and can&apos;t be removed.
+                </Typography>
+              )}
             </Grid>
 
             {/* Detail fields for any selected topic flagged "requires detail" (e.g. First Aid, Other) */}

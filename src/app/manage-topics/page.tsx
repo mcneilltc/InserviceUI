@@ -23,10 +23,13 @@ import {
   FormControlLabel,
   Chip,
   Box,
+  Autocomplete,
 } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import axios from 'axios';
+import moment from 'moment';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '../../components/AuthContext';
 
 interface Topic {
   id: string;
@@ -34,20 +37,77 @@ interface Topic {
   requiresDetail?: boolean;
 }
 
+const WEEK_KEYS = ['1', '2', '3', '4', '5'] as const;
+type WeekKey = typeof WEEK_KEYS[number];
+type WeeksSchedule = Record<WeekKey, string[]>;
+const emptyWeeks = (): WeeksSchedule => ({ '1': [], '2': [], '3': [], '4': [], '5': [] });
+
+// Matches the backend's day-of-month bucketing exactly (see
+// training-app-backend/services/mandatoryTopicsService.ts) — week 5 only
+// shows up for months with 29+ days.
+function weeksInMonth(yearMonth: string): number {
+  const daysInMonth = moment(yearMonth, 'YYYY-MM').daysInMonth();
+  return daysInMonth >= 29 ? 5 : 4;
+}
+
 const ManageTopics = () => {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [newTopic, setNewTopic] = useState('');
   const [newTopicRequiresDetail, setNewTopicRequiresDetail] = useState(false);
   const [editTopic, setEditTopic] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editRequiresDetail, setEditRequiresDetail] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
+  const [scheduleMonth, setScheduleMonth] = useState(moment().format('YYYY-MM'));
+  const [scheduleDraft, setScheduleDraft] = useState<WeeksSchedule>(emptyWeeks());
 
   const { data: topics = [] } = useQuery<Topic[]>({
     queryKey: ['topics'],
     queryFn: async () => {
       const response = await axios.get('/api/training-topics');
       return response.data;
+    }
+  });
+
+  // Read live from the fetched employee list, not the auth-context `user`
+  // object — that claim is baked into the session JWT at login and can go
+  // stale for hours after an admin grants/revokes it here, so this page
+  // would otherwise keep hiding (or showing) the schedule section after a
+  // permission change until the next login.
+  const { data: employees = [] } = useQuery<any[]>({
+    queryKey: ['employees'],
+    queryFn: async () => {
+      const response = await axios.get('/api/employees');
+      return response.data;
+    }
+  });
+  const ownEmployeeRecord = employees.find((e) => e.id === user?.employeeId);
+  const canManageSchedule = ownEmployeeRecord
+    ? ownEmployeeRecord.canManageMandatoryTopics === true
+    : user?.canManageMandatoryTopics === true;
+
+  const { data: scheduleData } = useQuery({
+    queryKey: ['mandatoryTopicsSchedule', scheduleMonth],
+    queryFn: async () => {
+      const response = await axios.get(`/api/mandatory-topics/${scheduleMonth}`);
+      return response.data.weeks as WeeksSchedule;
+    },
+    enabled: canManageSchedule,
+  });
+
+  useEffect(() => {
+    setScheduleDraft(scheduleData || emptyWeeks());
+  }, [scheduleData]);
+
+  const saveScheduleMutation = useMutation({
+    mutationFn: (weeks: WeeksSchedule) => axios.put(`/api/mandatory-topics/${scheduleMonth}`, { weeks }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['mandatoryTopicsSchedule', scheduleMonth] });
+      setSnackbar({ open: true, message: `Mandatory topics schedule saved for ${moment(scheduleMonth, 'YYYY-MM').format('MMMM YYYY')}`, severity: 'success' });
+    },
+    onError: (err: any) => {
+      setSnackbar({ open: true, message: err.response?.data?.message || 'Failed to save schedule', severity: 'error' });
     }
   });
 
@@ -204,6 +264,59 @@ const ManageTopics = () => {
           ))}
         </List>
       </Paper>
+
+      {canManageSchedule && (
+        <Paper sx={{ p: 4, mt: 4 }}>
+          <Typography variant="h4" component="h1" gutterBottom>
+            Mandatory Topics Schedule
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            Topics assigned to a week here are automatically included — and can&apos;t be removed — on every
+            training session a trainer creates that falls in that week, anywhere in the org. Trainers can still
+            add more topics on top.
+          </Typography>
+
+          <TextField
+            type="month"
+            label="Month"
+            value={scheduleMonth}
+            onChange={(e) => setScheduleMonth(e.target.value)}
+            sx={{ mb: 3, minWidth: 220 }}
+            InputLabelProps={{ shrink: true }}
+          />
+
+          <Grid container spacing={2}>
+            {Array.from({ length: weeksInMonth(scheduleMonth) }, (_, i) => String(i + 1) as WeekKey).map((weekKey) => (
+              <Grid size={12} key={weekKey}>
+                <Autocomplete
+                  multiple
+                  options={topics.map((t) => t.name)}
+                  value={scheduleDraft[weekKey] || []}
+                  onChange={(_e, newValue) => setScheduleDraft((prev) => ({ ...prev, [weekKey]: newValue }))}
+                  renderInput={(params) => (
+                    <TextField {...params} label={`Week ${weekKey} — mandatory topics`} placeholder="Add a topic" />
+                  )}
+                  renderTags={(value, getTagProps) =>
+                    value.map((option, index) => (
+                      <Chip label={option} size="small" {...getTagProps({ index })} key={option} />
+                    ))
+                  }
+                />
+              </Grid>
+            ))}
+          </Grid>
+
+          <Button
+            variant="contained"
+            sx={{ mt: 3 }}
+            onClick={() => saveScheduleMutation.mutate(scheduleDraft)}
+            disabled={saveScheduleMutation.isPending}
+          >
+            Save Schedule
+          </Button>
+        </Paper>
+      )}
+
       <Snackbar
         open={snackbar.open}
         autoHideDuration={3000}

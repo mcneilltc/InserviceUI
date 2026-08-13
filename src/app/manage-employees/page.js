@@ -93,6 +93,7 @@ const ManageEmployees = () => {
     isTrainer: false,
     isExemptFromHoursRequirement: false,
     canAddManualHours: true,
+    canManageMandatoryTopics: false,
   });
   const [activeTab, setActiveTab] = useState(0);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
@@ -273,6 +274,7 @@ const ManageEmployees = () => {
         isTrainer: employee.isTrainer || false,
         isExemptFromHoursRequirement: employee.isExemptFromHoursRequirement || false,
         canAddManualHours: employee.canAddManualHours !== false,
+        canManageMandatoryTopics: employee.canManageMandatoryTopics === true,
       });
     } else {
       setEditingEmployee(null);
@@ -291,6 +293,7 @@ const ManageEmployees = () => {
         isTrainer: false,
         isExemptFromHoursRequirement: false,
         canAddManualHours: true,
+        canManageMandatoryTopics: false,
       });
     }
     setOpenDialog(true);
@@ -988,6 +991,19 @@ const ManageEmployees = () => {
                       />
                     }
                     label="Can manually add hours (Add Hours button and Excel import historical hours)"
+                  />
+                </Grid>
+              )}
+              {formData.isSupervisor && (
+                <Grid size={12}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={formData.canManageMandatoryTopics}
+                        onChange={(e) => setFormData({ ...formData, canManageMandatoryTopics: e.target.checked })}
+                      />
+                    }
+                    label="Can manage mandatory monthly topics (sets which topics every trainer must cover each week, in Manage Topics)"
                   />
                 </Grid>
               )}
