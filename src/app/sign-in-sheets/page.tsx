@@ -4,12 +4,13 @@ import React, { useState } from 'react';
 import {
   Box, Container, Typography, Accordion, AccordionSummary, AccordionDetails,
   Grid, Card, CardContent, Chip, Stack, CircularProgress, Alert, Dialog,
-  DialogContent, IconButton,
+  DialogContent, IconButton, Button,
 } from '@mui/material';
 import {
   ExpandMore as ExpandMoreIcon,
   Close as CloseIcon,
   PhotoLibrary as PhotoLibraryIcon,
+  Description as DescriptionIcon,
 } from '@mui/icons-material';
 import axios from 'axios';
 import { useQuery } from '@tanstack/react-query';
@@ -24,6 +25,7 @@ interface Session {
   topics: string[];
   trainer: string[];
   sheetImageCount: number;
+  hasInserviceSheet: boolean;
 }
 
 interface Employee {
@@ -65,6 +67,7 @@ export default function SignInSheetsPage() {
   const [imagesByMonth, setImagesByMonth] = useState<Record<string, Record<string, string[]>>>({});
   const [loadingMonth, setLoadingMonth] = useState<string | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [downloadingSheetId, setDownloadingSheetId] = useState<string | null>(null);
 
   const { data: sessions = [] as Session[], isLoading, error } = useQuery({
     queryKey: ['sessions'],
@@ -84,8 +87,18 @@ export default function SignInSheetsPage() {
 
   const trainerName = (id: string) => employees.find((e) => e.id === id)?.name || id;
 
-  const sessionsWithPhotos = (sessions as Session[]).filter((s) => s.sheetImageCount > 0);
-  const grouped = groupByYearMonth(sessionsWithPhotos);
+  const relevantSessions = (sessions as Session[]).filter((s) => s.sheetImageCount > 0 || s.hasInserviceSheet);
+  const grouped = groupByYearMonth(relevantSessions);
+
+  const downloadInserviceSheet = async (sessionId: string) => {
+    setDownloadingSheetId(sessionId);
+    try {
+      const { data } = await axios.get(`${BACKEND_URL}/api/sessions/${sessionId}/inservice-sheet`);
+      window.open(data.url, '_blank');
+    } finally {
+      setDownloadingSheetId(null);
+    }
+  };
 
   // Signed URLs expire 5 minutes after they're issued (see
   // getSignedSheetImageUrl in the backend), so photos are fetched lazily —
@@ -117,7 +130,7 @@ export default function SignInSheetsPage() {
       {isLoading && <CircularProgress />}
       {!!error && <Alert severity="error">Failed to load sessions.</Alert>}
       {!isLoading && grouped.length === 0 && (
-        <Alert severity="info">No sign-in sheet photos have been uploaded yet.</Alert>
+        <Alert severity="info">No sign-in sheets are available yet.</Alert>
       )}
 
       {grouped.map(({ year, months }) => (
@@ -156,12 +169,26 @@ export default function SignInSheetsPage() {
                                   ))}
                                 </Stack>
                               </Box>
-                              <Chip
-                                icon={<PhotoLibraryIcon />}
-                                label={session.sheetImageCount}
-                                size="small"
-                                variant="outlined"
-                              />
+                              <Stack spacing={0.5} alignItems="flex-end">
+                                {session.sheetImageCount > 0 && (
+                                  <Chip
+                                    icon={<PhotoLibraryIcon />}
+                                    label={session.sheetImageCount}
+                                    size="small"
+                                    variant="outlined"
+                                  />
+                                )}
+                                {session.hasInserviceSheet && (
+                                  <Button
+                                    size="small"
+                                    startIcon={<DescriptionIcon />}
+                                    disabled={downloadingSheetId === session.id}
+                                    onClick={() => downloadInserviceSheet(session.id)}
+                                  >
+                                    Sign-In Sheet
+                                  </Button>
+                                )}
+                              </Stack>
                             </Stack>
 
                             <Grid container spacing={1} sx={{ mt: 1 }}>
