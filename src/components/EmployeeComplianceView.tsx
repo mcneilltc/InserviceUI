@@ -14,6 +14,7 @@ import {
   Pool as PoolIcon,
   EmojiEvents as EmojiEventsIcon,
   LocalFireDepartment as StreakIcon,
+  Info as InfoIcon,
 } from '@mui/icons-material';
 import { Doughnut } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
@@ -31,7 +32,7 @@ export interface Session {
 }
 
 export interface ComplianceInfo {
-  status: 'compliant' | 'at_risk' | 'non_compliant';
+  status: 'compliant' | 'at_risk' | 'non_compliant' | 'pending_certification';
   message: string;
   hoursThisMonth: number;
   hoursRemaining: number;
@@ -108,6 +109,13 @@ const statusConfig = {
     label: 'NON-COMPLIANT',
     chipColor: 'error' as const,
   },
+  pending_certification: {
+    color: '#616161',
+    bg: '#eceff1',
+    icon: <InfoIcon sx={{ fontSize: 28 }} />,
+    label: 'PENDING CERTIFICATION',
+    chipColor: 'default' as const,
+  },
 };
 
 export interface EmployeeComplianceViewProps {
@@ -176,7 +184,8 @@ export default function EmployeeComplianceView({ employee, compliance, sessions,
               <Alert
                 severity={
                   compliance.status === 'compliant' ? 'success' :
-                  compliance.status === 'at_risk' ? 'warning' : 'error'
+                  compliance.status === 'at_risk' ? 'warning' :
+                  compliance.status === 'pending_certification' ? 'info' : 'error'
                 }
                 sx={{ borderRadius: 2 }}
               >

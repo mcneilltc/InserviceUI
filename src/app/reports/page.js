@@ -40,8 +40,8 @@ const REPORT_TYPES = [
   { value: 'completed', label: 'Completed Trainings' },
 ];
 
-const STATUS_LABELS = { complete: 'Complete', atRisk: 'At Risk', incomplete: 'Incomplete', exempt: 'Exempt' };
-const STATUS_COLORS = { complete: 'success', atRisk: 'warning', incomplete: 'error', exempt: 'default' };
+const STATUS_LABELS = { complete: 'Complete', atRisk: 'At Risk', incomplete: 'Incomplete', exempt: 'Exempt', pendingCertification: 'Pending Certification' };
+const STATUS_COLORS = { complete: 'success', atRisk: 'warning', incomplete: 'error', exempt: 'default', pendingCertification: 'default' };
 
 // Column definitions per report type — shared by both the on-screen table and
 // the CSV export, so the two can never drift out of sync with each other.
