@@ -98,9 +98,15 @@ interface ImportEmployeesDialogProps {
   open: boolean;
   onClose: () => void;
   onImportComplete: () => void;
+  // The logged-in supervisor's own permission to credit hours — mirrors the
+  // Add Hours dialog's gate on the Manage Employees page, since both hit the
+  // same POST /api/training-sessions/:employeeId endpoint. When false,
+  // employees are still created but historical hours are skipped client-side
+  // rather than firing requests the backend would reject anyway.
+  canAddManualHours: boolean;
 }
 
-export default function ImportEmployeesDialog({ open, onClose, onImportComplete }: ImportEmployeesDialogProps) {
+export default function ImportEmployeesDialog({ open, onClose, onImportComplete, canAddManualHours }: ImportEmployeesDialogProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState(0);
   const [rawRows, setRawRows] = useState<any[]>([]);
@@ -204,6 +210,7 @@ export default function ImportEmployeesDialog({ open, onClose, onImportComplete 
   // an employee who was already synced — a genuine repeat just gets a 409
   // and is skipped, never double-counted.
   const creditHistoricalHours = async (empId: string, emp: any, location: string) => {
+    if (!canAddManualHours) return 0;
     const now = new Date();
     const monthKeys = Array.from({ length: MAX_HISTORICAL_MONTHS }, (_, i) => ({ field: monthField(i + 1), offset: i }));
     let credited = 0;
@@ -388,6 +395,12 @@ export default function ImportEmployeesDialog({ open, onClose, onImportComplete 
                 <strong>{unrecognizedSites.length} site name{unrecognizedSites.length !== 1 ? 's' : ''} not found in Manage Sites:</strong>{' '}
                 {unrecognizedSites.join(', ')}. These employees will still import with that location, but won&apos;t show up
                 correctly in location filters until you add the site in Manage Sites or fix the spreadsheet and re-upload.
+              </Alert>
+            )}
+            {!canAddManualHours && mappedMonthNumbers.length > 0 && (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                You don&apos;t have permission to manually add hours, so historical hours from the mapped Month columns
+                will be <strong>skipped</strong> — employees will still be created. Contact an administrator to request access.
               </Alert>
             )}
             <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 400 }}>

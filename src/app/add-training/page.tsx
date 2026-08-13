@@ -119,8 +119,10 @@ const AddTraining = () => {
   // (e.g. "First Aid", "Other") — keyed by topic name.
   const [topicDetails, setTopicDetails] = useState<Record<string, string>>({});
 
-  // Trainers are just employees with isTrainer === true — no separate collection.
-  const trainers = employees.filter((e: any) => e.isTrainer);
+  // Trainers are employees with isTrainer === true, plus supervisors (who can
+  // also lead training) — no separate collection. isTrainer still separately
+  // controls who lands on the Trainer Portal vs. Manager Portal.
+  const trainers = employees.filter((e: any) => e.isTrainer || e.isSupervisor);
 
   const { data: trainingSessions = [] as any[] } = useQuery({
     queryKey: ['sessions'],
