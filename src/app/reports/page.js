@@ -34,6 +34,7 @@ import axios from 'axios';
 import moment from 'moment';
 import { useQuery } from '@tanstack/react-query';
 import TopicTallyTable from '../../components/TopicTallyTable';
+import { exportTableToPdf } from '../../utils/pdfExport';
 
 const REPORT_TYPES = [
   { value: 'checkins', label: 'Check-Ins' },
@@ -79,18 +80,6 @@ const COLUMNS = {
     { key: 'traineeCount', label: 'Trainees' },
   ],
 };
-
-function toCsv(reportType, rows) {
-  const columns = COLUMNS[reportType];
-  const headerLine = columns.map((c) => c.label).join(',');
-  const lines = rows.map((row) =>
-    columns.map((c) => {
-      const raw = c.format ? c.format(row[c.key]) : row[c.key];
-      return `"${String(raw ?? '').replace(/"/g, '""')}"`;
-    }).join(',')
-  );
-  return [headerLine, ...lines].join('\n');
-}
 
 const Reports = () => {
   const [reportType, setReportType] = useState('checkins');
@@ -194,16 +183,14 @@ const Reports = () => {
   };
 
   const handleDownload = () => {
-    const csv = toCsv(reportType, reportData);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `${reportType}_report_${moment().format('YYYY-MM-DD')}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const columns = COLUMNS[reportType];
+    const reportLabel = REPORT_TYPES.find((t) => t.value === reportType)?.label || reportType;
+    exportTableToPdf({
+      title: `${reportLabel} Report`,
+      headers: columns.map((c) => c.label),
+      rows: reportData.map((row) => columns.map((c) => (c.format ? c.format(row[c.key]) : row[c.key]))),
+      filenamePrefix: `${reportLabel}_Report`,
+    });
   };
 
   const columns = COLUMNS[reportType];
@@ -319,7 +306,7 @@ const Reports = () => {
                 startIcon={<FileDownloadIcon />}
                 onClick={handleDownload}
               >
-                Download CSV
+                Download PDF
               </Button>
             </Stack>
             <TableContainer>

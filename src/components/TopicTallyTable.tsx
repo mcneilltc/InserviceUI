@@ -28,6 +28,7 @@ import axios from 'axios';
 import moment from 'moment';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from './AuthContext';
+import { exportTableToPdf } from '../utils/pdfExport';
 
 const BACKEND_URL = ''; // relative — proxied through next.config.mjs's rewrite so the session cookie is same-origin, not third-party
 
@@ -107,22 +108,13 @@ export default function TopicTallyTable({ endpoint, title, personLabel }: TopicT
   const rows = data?.rows ?? [];
 
   const handleDownload = () => {
-    const periodLabel = period === 'month' ? month : year;
-    const header = [personLabel, 'Location', ...topics, 'Total'];
-    const lines = rows.map((row) => {
-      const cells = [row.name, row.location, ...topics.map((t) => String(row.counts[t] || 0)), String(row.total)];
-      return cells.map((c) => `"${c.replace(/"/g, '""')}"`).join(',');
+    const periodLabel = period === 'month' ? moment(month, 'YYYY-MM').format('MMMM YYYY') : year;
+    exportTableToPdf({
+      title: `${title} — ${periodLabel}`,
+      headers: [personLabel, 'Location', ...topics, 'Total'],
+      rows: rows.map((row) => [row.name, row.location, ...topics.map((t) => row.counts[t] || 0), row.total]),
+      filenamePrefix: `${title}_${periodLabel}`,
     });
-    const csv = [header.map((h) => `"${h}"`).join(','), ...lines].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `${personLabel.toLowerCase()}_topics_${periodLabel}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   return (
@@ -199,7 +191,7 @@ export default function TopicTallyTable({ endpoint, title, personLabel }: TopicT
         <>
           <Stack direction="row" justifyContent="flex-end" sx={{ mb: 1 }}>
             <Button variant="outlined" startIcon={<FileDownloadIcon />} onClick={handleDownload}>
-              Download CSV
+              Download PDF
             </Button>
           </Stack>
           <TableContainer>

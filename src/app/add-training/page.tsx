@@ -59,6 +59,7 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import axios from "axios";
 import moment from "moment";
+import { exportTableToPdf } from "../../utils/pdfExport";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../components/AuthContext";
 
@@ -645,7 +646,6 @@ const AddTraining = () => {
   };
 
   const handleExport = () => {
-    // Create CSV content
     const headers = [
       "Date",
       "Topic",
@@ -655,46 +655,32 @@ const AddTraining = () => {
       "Number of Trainees",
       "Trainee Names",
     ];
-    const csvContent = [
-      headers.join(","),
-      ...filteredSessions.map((session) => {
-        // Get trainee names by matching IDs with employees
-        const traineeNames =
-          session.trainees
-            ?.map((id) => employees.find((emp) => emp.id === id)?.name)
-            .filter(Boolean)
-            .join("; ") || "";
+    const rows = filteredSessions.map((session) => {
+      const traineeNames =
+        session.trainees
+          ?.map((id) => employees.find((emp) => emp.id === id)?.name)
+          .filter(Boolean)
+          .join("; ") || "";
+      const formattedDate = moment(session.date).format("MM-DD-YYYY");
+      const sessionTopics = session.topics || (session.topic ? [session.topic] : []);
 
-        // Format date as MM-DD-YYYY
-        const formattedDate = moment(session.date).format("MM-DD-YYYY");
+      return [
+        formattedDate,
+        sessionTopics.join("; "),
+        getSessionTrainerNames(session).join("; "),
+        session.location,
+        session.status,
+        session.trainees?.length || 0,
+        traineeNames,
+      ];
+    });
 
-        const sessionTopics = session.topics || (session.topic ? [session.topic] : []);
-
-        return [
-          formattedDate,
-          `"${sessionTopics.join("; ")}"`,
-          `"${getSessionTrainerNames(session).join("; ")}"`,
-          session.location,
-          session.status,
-          session.trainees?.length || 0,
-          `"${traineeNames}"`, // Wrap in quotes to handle commas in names
-        ].join(",");
-      }),
-    ].join("\n");
-
-    // Create and trigger download
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute(
-      "download",
-      `inservice_training_sessions_${moment().format("MM-DD-YYYY")}.csv`
-    );
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    exportTableToPdf({
+      title: "Inservice Training Sessions",
+      headers,
+      rows,
+      filenamePrefix: "Inservice_Training_Sessions",
+    });
   };
 
   return (
@@ -916,7 +902,7 @@ const AddTraining = () => {
                 <FilterListIcon />
               </IconButton>
             </Tooltip>
-            <Tooltip title="Export to CSV">
+            <Tooltip title="Export to PDF">
               <IconButton onClick={handleExport}>
                 <DownloadIcon />
               </IconButton>
