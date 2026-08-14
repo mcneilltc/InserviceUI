@@ -59,6 +59,7 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import axios from "axios";
 import moment from "moment";
+import { exportTableToPdf } from "../../utils/pdfExport";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../components/AuthContext";
 
@@ -191,6 +192,39 @@ const AddTraining = () => {
       date,
     }));
   };
+
+  // Whichever topics are mandatory for the selected date's week (set in
+  // Manage Topics > Mandatory Topics Schedule) — locked into formData.topics
+  // below, can't be unchecked. Refetched whenever the date changes since a
+  // different date can fall in a different week/month.
+  const [mandatoryTopicsForWeek, setMandatoryTopicsForWeek] = useState<string[]>([]);
+  useEffect(() => {
+    if (!formData.date) {
+      setMandatoryTopicsForWeek([]);
+      return;
+    }
+    const dateStr = moment(formData.date).format('YYYY-MM-DD');
+    let cancelled = false;
+    axios.get('/api/mandatory-topics/for-date', { params: { date: dateStr } })
+      .then(({ data }) => {
+        if (!cancelled) setMandatoryTopicsForWeek(data.topics || []);
+      })
+      .catch(() => {
+        if (!cancelled) setMandatoryTopicsForWeek([]);
+      });
+    return () => { cancelled = true; };
+  }, [formData.date]);
+
+  // Auto-add any newly-mandatory topics as soon as they're known, so they're
+  // pre-selected without the trainer needing to touch the Topics field.
+  useEffect(() => {
+    if (mandatoryTopicsForWeek.length === 0) return;
+    setFormData((prev) => {
+      const merged = Array.from(new Set([...(prev.topics || []), ...mandatoryTopicsForWeek]));
+      if (merged.length === (prev.topics || []).length) return prev;
+      return { ...prev, topics: merged };
+    });
+  }, [mandatoryTopicsForWeek]);
 
   const handleTraineeChange = (employeeId) => (event) => {
     setSelectedTrainees((prev) => {
@@ -612,7 +646,6 @@ const AddTraining = () => {
   };
 
   const handleExport = () => {
-    // Create CSV content
     const headers = [
       "Date",
       "Topic",
@@ -622,46 +655,32 @@ const AddTraining = () => {
       "Number of Trainees",
       "Trainee Names",
     ];
-    const csvContent = [
-      headers.join(","),
-      ...filteredSessions.map((session) => {
-        // Get trainee names by matching IDs with employees
-        const traineeNames =
-          session.trainees
-            ?.map((id) => employees.find((emp) => emp.id === id)?.name)
-            .filter(Boolean)
-            .join("; ") || "";
+    const rows = filteredSessions.map((session) => {
+      const traineeNames =
+        session.trainees
+          ?.map((id) => employees.find((emp) => emp.id === id)?.name)
+          .filter(Boolean)
+          .join("; ") || "";
+      const formattedDate = moment(session.date).format("MM-DD-YYYY");
+      const sessionTopics = session.topics || (session.topic ? [session.topic] : []);
 
-        // Format date as MM-DD-YYYY
-        const formattedDate = moment(session.date).format("MM-DD-YYYY");
+      return [
+        formattedDate,
+        sessionTopics.join("; "),
+        getSessionTrainerNames(session).join("; "),
+        session.location,
+        session.status,
+        session.trainees?.length || 0,
+        traineeNames,
+      ];
+    });
 
-        const sessionTopics = session.topics || (session.topic ? [session.topic] : []);
-
-        return [
-          formattedDate,
-          `"${sessionTopics.join("; ")}"`,
-          `"${getSessionTrainerNames(session).join("; ")}"`,
-          session.location,
-          session.status,
-          session.trainees?.length || 0,
-          `"${traineeNames}"`, // Wrap in quotes to handle commas in names
-        ].join(",");
-      }),
-    ].join("\n");
-
-    // Create and trigger download
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute(
-      "download",
-      `inservice_training_sessions_${moment().format("MM-DD-YYYY")}.csv`
-    );
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    exportTableToPdf({
+      title: "Inservice Training Sessions",
+      headers,
+      rows,
+      filenamePrefix: "Inservice_Training_Sessions",
+    });
   };
 
   return (
@@ -749,18 +768,36 @@ const AddTraining = () => {
                       setOpenNewTopicModal(true);
                       return;
                     }
-                    setFormData((prev) => ({ ...prev, topics: value }));
+                    // Mandatory topics can't be unchecked — re-union them back
+                    // in even if something managed to toggle one off, so the
+                    // MenuItem's `disabled` below is belt-and-suspenders, not
+                    // the only thing enforcing this.
+                    const withMandatory = Array.from(new Set([...value, ...mandatoryTopicsForWeek]));
+                    setFormData((prev) => ({ ...prev, topics: withMandatory }));
                   }}
                   renderValue={(selected) => (selected as string[]).join(", ")}
                 >
-                  {topics.map((topic: any, index) => (
-                    <MenuItem key={`topic-${index}-${topic.name}`} value={topic.name}>
-                      {topic.name}
-                    </MenuItem>
-                  ))}
+                  {topics.map((topic: any, index) => {
+                    const isMandatory = mandatoryTopicsForWeek.includes(topic.name);
+                    return (
+                      <MenuItem
+                        key={`topic-${index}-${topic.name}`}
+                        value={topic.name}
+                        disabled={isMandatory && (formData.topics ?? []).includes(topic.name)}
+                      >
+                        {topic.name}{isMandatory ? ' (mandatory)' : ''}
+                      </MenuItem>
+                    );
+                  })}
                   {isSupervisor && <MenuItem value="new">+ Add New Topic</MenuItem>}
                 </Select>
               </FormControl>
+              {mandatoryTopicsForWeek.length > 0 && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                  {mandatoryTopicsForWeek.join(', ')} {mandatoryTopicsForWeek.length === 1 ? 'is' : 'are'} mandatory
+                  this week and can&apos;t be removed.
+                </Typography>
+              )}
             </Grid>
 
             {/* Detail fields for any selected topic flagged "requires detail" (e.g. First Aid, Other) */}
@@ -865,7 +902,7 @@ const AddTraining = () => {
                 <FilterListIcon />
               </IconButton>
             </Tooltip>
-            <Tooltip title="Export to CSV">
+            <Tooltip title="Export to PDF">
               <IconButton onClick={handleExport}>
                 <DownloadIcon />
               </IconButton>

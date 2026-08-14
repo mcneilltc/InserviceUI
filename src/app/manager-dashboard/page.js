@@ -50,6 +50,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import EmployeeHoursTracker from '../../components/EmployeeHoursTracker';
 import { useAuth } from '../../components/AuthContext';
+import { exportTableToPdf } from '../../utils/pdfExport';
 
 ChartJS.register(ArcElement, ChartTooltip, Legend);
 
@@ -269,29 +270,20 @@ const ManagerDashboard = () => {
   };
 
   const handleDownloadSiteReport = (siteName, employeesList) => {
-    const headers = ['Name', 'Email', 'Location', 'Hours This Month', 'Needed By 15th', 'Needed By End', 'Status'];
-    const csvContent = [
-      headers.join(','),
-      ...employeesList.map(emp => [
-        `"${emp.name || ''}"`,
-        `"${emp.email || ''}"`,
-        `"${emp.location || ''}"`,
+    exportTableToPdf({
+      title: `Compliance Deficiency Report — ${siteName}`,
+      headers: ['Name', 'Email', 'Location', 'Hours This Month', 'Needed By 15th', 'Needed By End', 'Status'],
+      rows: employeesList.map(emp => [
+        emp.name || '',
+        emp.email || '',
+        emp.location || '',
         emp.hoursThisMonth || 0,
         emp.hoursNeededByMidMonth || 0,
         emp.hoursNeededByEndOfMonth || 0,
-        emp.status
-      ].join(','))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `compliance_report_${siteName.replace(/\s+/g, '_')}_${moment().format('YYYY-MM-DD')}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+        emp.status,
+      ]),
+      filenamePrefix: `Compliance_Report_${siteName.replace(/\s+/g, '_')}`,
+    });
   };
 
 

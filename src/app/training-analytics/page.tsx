@@ -35,6 +35,7 @@ import {
 import { Bar, Line } from 'react-chartjs-2';
 import moment from 'moment';
 import { useAuth } from '../../components/AuthContext';
+import TopicTallyTable from '../../components/TopicTallyTable';
 
 ChartJS.register(BarElement, LineElement, PointElement, CategoryScale, LinearScale, Tooltip, Legend);
 
@@ -357,7 +358,9 @@ export default function TrainingAnalyticsPage() {
           </Grid>
         </Grid>
 
-        
+        {/* Per-person breakdown of the same topic data as the charts above */}
+        <TopicTallyTable endpoint="/api/topic-tally/employees" title="Topics by Employee" personLabel="Employee" />
+        <TopicTallyTable endpoint="/api/topic-tally/trainers" title="Topics by Trainer" personLabel="Trainer" />
       </Box>
     </Container>
   );

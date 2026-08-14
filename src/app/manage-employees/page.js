@@ -75,10 +75,6 @@ const ManageEmployees = () => {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  // The logged-in supervisor's own permission — gates the Add Hours dialog
-  // and the Excel import's historical-hours step. Missing/undefined (e.g.
-  // trainers, or a supervisor never explicitly restricted) defaults to allowed.
-  const canAddManualHours = user?.canAddManualHours !== false;
   const [openDialog, setOpenDialog] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [formData, setFormData] = useState({
@@ -97,6 +93,7 @@ const ManageEmployees = () => {
     isTrainer: false,
     isExemptFromHoursRequirement: false,
     canAddManualHours: true,
+    canManageMandatoryTopics: false,
   });
   const [activeTab, setActiveTab] = useState(0);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
@@ -111,6 +108,7 @@ const ManageEmployees = () => {
   const [bulkCertType, setBulkCertType] = useState('');
   const [bulkCertExpiration, setBulkCertExpiration] = useState(moment());
   const [openImportDialog, setOpenImportDialog] = useState(false);
+  const [openBulkManualHoursDialog, setOpenBulkManualHoursDialog] = useState(false);
   const [addHoursEmployee, setAddHoursEmployee] = useState(null);
   const [addHoursData, setAddHoursData] = useState({ date: moment(), hours: '', topic: 'Inservice Training' });
 
@@ -123,6 +121,21 @@ const ManageEmployees = () => {
     }
   });
   const error = queryError ? 'Failed to fetch employees' : null;
+
+  // The logged-in supervisor's own permission — gates the Add Hours dialog
+  // and the Excel import's historical-hours step. Read live from the
+  // employees list (not user.canAddManualHours from the auth context) —
+  // that claim is baked into the session JWT at login and can go stale for
+  // hours after an admin changes it here, so this page would otherwise keep
+  // showing a supervisor their own Add Hours button after it's been revoked
+  // (the backend still correctly rejects the request either way; this just
+  // keeps what's shown in sync with what's actually allowed). Missing/
+  // undefined (e.g. trainers, or a supervisor never explicitly restricted)
+  // defaults to allowed.
+  const ownEmployeeRecord = employees.find((e) => e.id === user?.employeeId);
+  const canAddManualHours = ownEmployeeRecord
+    ? ownEmployeeRecord.canAddManualHours !== false
+    : user?.canAddManualHours !== false;
 
   const { data: LOCATIONS = [] } = useQuery({
     queryKey: ['sites'],
@@ -195,6 +208,22 @@ const ManageEmployees = () => {
     onError: (err) => handleError(err, 'Failed to assign certification')
   });
 
+  const bulkManualHoursMutation = useMutation({
+    mutationFn: (updates) => axios.patch('/api/employees/manual-hours-permissions', { updates }),
+    onSuccess: (_response, updates) => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      const enabling = updates[0]?.canAddManualHours;
+      setSnackbar({
+        open: true,
+        message: `Manual hours ${enabling ? 'enabled' : 'disabled'} for ${updates.length} supervisor${updates.length !== 1 ? 's' : ''}`,
+        severity: 'success',
+      });
+      setOpenBulkManualHoursDialog(false);
+      setSelectedEmployees([]);
+    },
+    onError: (err) => handleError(err, 'Failed to update manual-hours permissions')
+  });
+
   const backfillCertsMutation = useMutation({
     mutationFn: (promises) => Promise.all(promises),
     onSuccess: (results) => {
@@ -245,6 +274,7 @@ const ManageEmployees = () => {
         isTrainer: employee.isTrainer || false,
         isExemptFromHoursRequirement: employee.isExemptFromHoursRequirement || false,
         canAddManualHours: employee.canAddManualHours !== false,
+        canManageMandatoryTopics: employee.canManageMandatoryTopics === true,
       });
     } else {
       setEditingEmployee(null);
@@ -263,6 +293,7 @@ const ManageEmployees = () => {
         isTrainer: false,
         isExemptFromHoursRequirement: false,
         canAddManualHours: true,
+        canManageMandatoryTopics: false,
       });
     }
     setOpenDialog(true);
@@ -420,6 +451,18 @@ const ManageEmployees = () => {
     bulkAssignCertMutation.mutate(promises);
   };
 
+  // Only selected employees who are supervisors are eligible — the flag is
+  // meaningless for anyone else, and the backend rejects the whole batch if
+  // a non-supervisor is included.
+  const selectedSupervisorIds = selectedEmployees.filter(
+    (id) => employees.find((emp) => emp.id === id)?.isSupervisor
+  );
+
+  const handleBulkSetManualHoursPermission = (canAddManualHours) => {
+    const updates = selectedSupervisorIds.map((employeeId) => ({ employeeId, canAddManualHours }));
+    bulkManualHoursMutation.mutate(updates);
+  };
+
   // Employees whose spreadsheet import stored a certification expiration date
   // but never got a matching entry in the certifications array the
   // Certifications/compliance page actually reads (fixed for new imports,
@@ -569,25 +612,16 @@ const ManageEmployees = () => {
             <Typography variant="h6" gutterBottom>
               Location Summary
             </Typography>
-            <Stack direction="row" spacing={2} flexWrap="wrap" gap={2}>
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
               {Object.entries(locationSummary).map(([location, count]) => (
-                <Box
+                <Chip
                   key={location}
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1,
-                    p: 1,
-                    bgcolor: 'primary.light',
-                    borderRadius: 1,
-                    color: 'white',
-                  }}
-                >
-                  <LocationIcon />
-                  <Typography>
-                    {location}: {count} {count === 1 ? 'employee' : 'employees'}
-                  </Typography>
-                </Box>
+                  icon={<LocationIcon />}
+                  label={`${location}: ${count} ${count === 1 ? 'employee' : 'employees'}`}
+                  color="primary"
+                  variant={selectedLocation === location ? 'filled' : 'outlined'}
+                  onClick={() => setSelectedLocation(selectedLocation === location ? '' : location)}
+                />
               ))}
             </Stack>
           </CardContent>
@@ -655,6 +689,12 @@ const ManageEmployees = () => {
               onClick={() => setOpenBulkCertDialog(true)}
             >
               Assign Certification to Selected ({selectedEmployees.length})
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={() => setOpenBulkManualHoursDialog(true)}
+            >
+              Manual-Hours Permission for Selected ({selectedEmployees.length})
             </Button>
           </Box>
         )}
@@ -954,6 +994,19 @@ const ManageEmployees = () => {
                   />
                 </Grid>
               )}
+              {formData.isSupervisor && (
+                <Grid size={12}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={formData.canManageMandatoryTopics}
+                        onChange={(e) => setFormData({ ...formData, canManageMandatoryTopics: e.target.checked })}
+                      />
+                    }
+                    label="Can manage mandatory monthly topics (sets which topics every trainer must cover each week, in Manage Topics)"
+                  />
+                </Grid>
+              )}
               <Grid size={12}>
                 <FormControlLabel
                   control={
@@ -1062,6 +1115,51 @@ const ManageEmployees = () => {
               disabled={!bulkCertType || bulkAssignCertMutation.isPending}
             >
               Assign Certification
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Bulk Manual-Hours Permission Dialog — lets an admin grant/revoke
+            the "can manually add hours" permission (see the isSupervisor
+            checkbox in the edit dialog below) across many supervisors at
+            once instead of one at a time. */}
+        <Dialog open={openBulkManualHoursDialog} onClose={() => setOpenBulkManualHoursDialog(false)} maxWidth="sm" fullWidth>
+          <DialogTitle>
+            Manual-Hours Permission for Selected Employees
+          </DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+              This permission only applies to supervisors. Of the {selectedEmployees.length} selected employee
+              {selectedEmployees.length !== 1 ? 's' : ''}, {selectedSupervisorIds.length} {selectedSupervisorIds.length === 1 ? 'is a supervisor' : 'are supervisors'} and will be updated{selectedSupervisorIds.length < selectedEmployees.length ? ' — the rest will be left unchanged' : ''}.
+            </Typography>
+            {selectedSupervisorIds.length > 0 && (
+              <Stack spacing={0.5} sx={{ mt: 2 }}>
+                {selectedSupervisorIds.map((id) => {
+                  const emp = employees.find((e) => e.id === id);
+                  return (
+                    <Typography key={id} variant="body2">
+                      • {emp?.name}{emp?.canAddManualHours === false ? ' (currently disabled)' : ' (currently enabled)'}
+                    </Typography>
+                  );
+                })}
+              </Stack>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOpenBulkManualHoursDialog(false)}>Cancel</Button>
+            <Button
+              onClick={() => handleBulkSetManualHoursPermission(false)}
+              color="warning"
+              disabled={selectedSupervisorIds.length === 0 || bulkManualHoursMutation.isPending}
+            >
+              Disable for Selected
+            </Button>
+            <Button
+              onClick={() => handleBulkSetManualHoursPermission(true)}
+              variant="contained"
+              disabled={selectedSupervisorIds.length === 0 || bulkManualHoursMutation.isPending}
+            >
+              Enable for Selected
             </Button>
           </DialogActions>
         </Dialog>
