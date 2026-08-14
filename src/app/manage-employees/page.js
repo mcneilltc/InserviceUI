@@ -94,6 +94,7 @@ const ManageEmployees = () => {
     isExemptFromHoursRequirement: false,
     canAddManualHours: true,
     canManageMandatoryTopics: false,
+    canDeleteSignInSheets: false,
   });
   const [activeTab, setActiveTab] = useState(0);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
@@ -281,6 +282,7 @@ const ManageEmployees = () => {
         isExemptFromHoursRequirement: employee.isExemptFromHoursRequirement || false,
         canAddManualHours: employee.canAddManualHours !== false,
         canManageMandatoryTopics: employee.canManageMandatoryTopics === true,
+        canDeleteSignInSheets: employee.canDeleteSignInSheets === true,
       });
     } else {
       setEditingEmployee(null);
@@ -300,6 +302,7 @@ const ManageEmployees = () => {
         isExemptFromHoursRequirement: false,
         canAddManualHours: true,
         canManageMandatoryTopics: false,
+        canDeleteSignInSheets: false,
       });
     }
     setOpenDialog(true);
@@ -1010,6 +1013,19 @@ const ManageEmployees = () => {
                       />
                     }
                     label="Can manage mandatory monthly topics (sets which topics every trainer must cover each week, in Manage Topics)"
+                  />
+                </Grid>
+              )}
+              {formData.isSupervisor && (
+                <Grid size={12}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={formData.canDeleteSignInSheets}
+                        onChange={(e) => setFormData({ ...formData, canDeleteSignInSheets: e.target.checked })}
+                      />
+                    }
+                    label="Can delete sign-in sheets (uploaded photos and generated PDFs, on the Sign-In Sheets page)"
                   />
                 </Grid>
               )}

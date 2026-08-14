@@ -101,6 +101,10 @@ const AddTraining = () => {
   const [openTraineeDialog, setOpenTraineeDialog] = useState(false);
   const [selectedTrainees, setSelectedTrainees] = useState<string[]>([]);
   const [createdTrainingId, setCreatedTrainingId] = useState<string | null>(null);
+  const [editTopicsSession, setEditTopicsSession] = useState<any>(null);
+  const [editTopicsValue, setEditTopicsValue] = useState<string[]>([]);
+  const [editTopicsMandatory, setEditTopicsMandatory] = useState<string[]>([]);
+  const [savingTopics, setSavingTopics] = useState(false);
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
@@ -160,8 +164,8 @@ const AddTraining = () => {
   const [selectedSessionForManualAdd, setSelectedSessionForManualAdd] = useState(null);
   const [qrDialogSession, setQrDialogSession] = useState(null);
   // A single confirm dialog reused for actions that are hard to undo (Archive,
-  // Cancel Training) — a safety net so a mis-tap among the tightly clustered
-  // action icons doesn't silently take effect.
+  // Cancel Training, Close Out) — a safety net so a mis-tap among the tightly
+  // clustered action icons doesn't silently take effect.
   const [confirmDialog, setConfirmDialog] = useState<{
     title: string;
     message: string;
@@ -460,6 +464,69 @@ const AddTraining = () => {
         severity: "error",
       });
     }
+  };
+
+  const handleEditTopics = async (session) => {
+    setEditTopicsSession(session);
+    setEditTopicsValue(session.topics || (session.topic ? [session.topic] : []));
+    setEditTopicsMandatory([]);
+    try {
+      const { data } = await axios.get('/api/mandatory-topics/for-date', { params: { date: session.date } });
+      setEditTopicsMandatory(data.topics || []);
+    } catch (error) {
+      // A schedule-lookup failure shouldn't block editing — it just means
+      // nothing gets treated as locked-mandatory for this session's week.
+      console.error("Error fetching mandatory topics for date:", error);
+    }
+  };
+
+  const handleSaveTopics = async () => {
+    if (!editTopicsSession) return;
+    if (editTopicsValue.length === 0) {
+      setSnackbar({ open: true, message: "Select at least one topic", severity: "error" });
+      return;
+    }
+    setSavingTopics(true);
+    try {
+      const response = await axios.put(`/api/sessions/${editTopicsSession.id}`, { topics: editTopicsValue });
+      upsertSessionInCache(editTopicsSession.id, response.data.session);
+      setSnackbar({ open: true, message: "Topics updated", severity: "success" });
+      setEditTopicsSession(null);
+    } catch (error: any) {
+      const message = error.response?.data?.error?.message || error.response?.data?.message || "Failed to update topics";
+      setSnackbar({ open: true, message, severity: "error" });
+    } finally {
+      setSavingTopics(false);
+    }
+  };
+
+  // A session's own `endTime` is only ever set on OCR-imported sheets — one
+  // created through this form just has a start time + duration, so the
+  // scheduled end has to be derived the same way for both.
+  const getScheduledEndMoment = (session) => {
+    const start = moment(`${session.date} ${session.startTime}`.trim(), ['YYYY-MM-DD hh:mm A', 'YYYY-MM-DD HH:mm', 'YYYY-MM-DD'], true);
+    if (!start.isValid()) return null;
+    if (session.endTime) {
+      const end = moment(`${session.date} ${session.endTime}`.trim(), ['YYYY-MM-DD hh:mm A', 'YYYY-MM-DD HH:mm'], true);
+      return end.isValid() ? end : null;
+    }
+    return session.length ? start.clone().add(session.length, 'hours') : null;
+  };
+
+  const confirmCloseOutTraining = (session) => {
+    const scheduledEnd = getScheduledEndMoment(session);
+    const isEarly = scheduledEnd && moment().isBefore(scheduledEnd);
+    const topicsLabel = (session.topics || [session.topic]).join(', ');
+
+    setConfirmDialog({
+      title: isEarly ? "This session isn't over yet — close out anyway?" : "Close out this session?",
+      message: isEarly
+        ? `"${topicsLabel}" on ${session.date} isn't scheduled to end until ${scheduledEnd.format('h:mm A')}. Closing out now stops new check-ins and credits hours immediately — anyone who hasn't checked in yet will be missed.`
+        : `This credits hours for everyone checked in to "${topicsLabel}" on ${session.date} and generates the sign-in sheet. This can't be undone from here.`,
+      confirmLabel: "Close Out Session",
+      confirmColor: isEarly ? "warning" : "primary",
+      onConfirm: () => handleCompleteTraining(session.id),
+    });
   };
 
   const handleCompleteTraining = async (sessionId) => {
@@ -1094,6 +1161,15 @@ const AddTraining = () => {
                                 <GroupIcon />
                               </IconButton>
                             </Tooltip>
+                            <Tooltip title="Edit Topics">
+                              <IconButton
+                                edge="end"
+                                onClick={() => handleEditTopics(session)}
+                                sx={ACTION_BUTTON_SX}
+                              >
+                                <EditIcon />
+                              </IconButton>
+                            </Tooltip>
                             <Tooltip title="Manually Add Employee">
                               <IconButton
                                 edge="end"
@@ -1107,9 +1183,7 @@ const AddTraining = () => {
                             <Tooltip title="Close Out Session & Credit Hours">
                               <IconButton
                                 edge="end"
-                                onClick={() =>
-                                  handleCompleteTraining(session.id)
-                                }
+                                onClick={() => confirmCloseOutTraining(session)}
                                 sx={ACTION_BUTTON_SX}
                               >
                                 <CheckCircleIcon />
@@ -1180,7 +1254,7 @@ const AddTraining = () => {
         </List>
       </Paper>
 
-      {/* Shared confirmation for hard-to-undo actions (Cancel, Archive) */}
+      {/* Shared confirmation for hard-to-undo actions (Cancel, Archive, Close Out) */}
       <Dialog open={!!confirmDialog} onClose={() => setConfirmDialog(null)}>
         <DialogTitle>{confirmDialog?.title}</DialogTitle>
         <DialogContent>
@@ -1343,6 +1417,61 @@ const AddTraining = () => {
           <Button onClick={() => setOpenTraineeDialog(false)}>Cancel</Button>
           <Button onClick={handleAddTrainees} variant="contained">
             {createdTrainingId ? "Update Trainees" : "Add Selected Trainees"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Edit Topics Dialog */}
+      <Dialog open={!!editTopicsSession} onClose={() => setEditTopicsSession(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>Edit Topics</DialogTitle>
+        <DialogContent>
+          {editTopicsSession && (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              {moment(editTopicsSession.date).format('MMM D, YYYY')} — {editTopicsSession.location}
+            </Typography>
+          )}
+          <FormControl fullWidth required sx={{ mt: 1 }}>
+            <InputLabel>Training Topics</InputLabel>
+            <Select
+              multiple
+              value={editTopicsValue}
+              label="Training Topics"
+              onChange={(e) => {
+                const value = Array.isArray(e.target.value)
+                  ? e.target.value as string[]
+                  : String(e.target.value || '').split(',').filter(Boolean);
+                // Same belt-and-suspenders re-union as the create form — see
+                // the comment on the Topics field above.
+                const withMandatory = Array.from(new Set([...value, ...editTopicsMandatory]));
+                setEditTopicsValue(withMandatory);
+              }}
+              renderValue={(selected) => (selected as string[]).join(", ")}
+            >
+              {topics.map((topic: any, index) => {
+                const isMandatory = editTopicsMandatory.includes(topic.name);
+                return (
+                  <MenuItem
+                    key={`edit-topic-${index}-${topic.name}`}
+                    value={topic.name}
+                    disabled={isMandatory && editTopicsValue.includes(topic.name)}
+                  >
+                    {topic.name}{isMandatory ? ' (mandatory)' : ''}
+                  </MenuItem>
+                );
+              })}
+            </Select>
+          </FormControl>
+          {editTopicsMandatory.length > 0 && (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+              {editTopicsMandatory.join(', ')} {editTopicsMandatory.length === 1 ? 'is' : 'are'} mandatory
+              this week and can&apos;t be removed.
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditTopicsSession(null)}>Cancel</Button>
+          <Button onClick={handleSaveTopics} variant="contained" disabled={savingTopics}>
+            Save Topics
           </Button>
         </DialogActions>
       </Dialog>
