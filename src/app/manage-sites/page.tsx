@@ -20,6 +20,7 @@ import {
 import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import axios from 'axios';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '../../components/AuthContext';
 
 interface Site {
   id: string;
@@ -27,6 +28,8 @@ interface Site {
 }
 
 const ManageSites = () => {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const queryClient = useQueryClient();
   const [newSite, setNewSite] = useState('');
   const [editSite, setEditSite] = useState<string | null>(null);
@@ -117,23 +120,26 @@ const ManageSites = () => {
         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
           Add, rename, or remove the physical sites available as employee locations and home locations
           throughout the app. A site can&apos;t be deleted while it&apos;s still assigned to an employee.
+          {!isAdmin && ' Only an Admin can make changes here — this view is read-only for you.'}
         </Typography>
-        <Grid container spacing={2} alignItems="center" sx={{ mb: 4 }}>
-          <Grid size={12}>
-            <TextField
-              fullWidth
-              label="New Site"
-              value={newSite}
-              onChange={(e) => setNewSite(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAddSite()}
-            />
+        {isAdmin && (
+          <Grid container spacing={2} alignItems="center" sx={{ mb: 4 }}>
+            <Grid size={12}>
+              <TextField
+                fullWidth
+                label="New Site"
+                value={newSite}
+                onChange={(e) => setNewSite(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddSite()}
+              />
+            </Grid>
+            <Grid size={12}>
+              <Button variant="contained" color="primary" onClick={handleAddSite}>
+                Add Site
+              </Button>
+            </Grid>
           </Grid>
-          <Grid size={12}>
-            <Button variant="contained" color="primary" onClick={handleAddSite}>
-              Add Site
-            </Button>
-          </Grid>
-        </Grid>
+        )}
         <List>
         {sites.map((site) => (
             <ListItem key={site.id}>
@@ -158,17 +164,19 @@ const ManageSites = () => {
               ) : (
                 <ListItemText primary={site.name} />
               )}
-              <ListItemSecondaryAction>
-                <IconButton
-                  edge="end"
-                  onClick={() => (editSite === site.id ? setEditSite(null) : startEditing(site))}
-                >
-                  <EditIcon />
-                </IconButton>
-                <IconButton edge="end" color="error" onClick={() => handleDeleteSite(site)}>
-                  <DeleteIcon />
-                </IconButton>
-              </ListItemSecondaryAction>
+              {isAdmin && (
+                <ListItemSecondaryAction>
+                  <IconButton
+                    edge="end"
+                    onClick={() => (editSite === site.id ? setEditSite(null) : startEditing(site))}
+                  >
+                    <EditIcon />
+                  </IconButton>
+                  <IconButton edge="end" color="error" onClick={() => handleDeleteSite(site)}>
+                    <DeleteIcon />
+                  </IconButton>
+                </ListItemSecondaryAction>
+              )}
             </ListItem>
           ))}
         </List>

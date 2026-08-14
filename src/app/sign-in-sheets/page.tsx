@@ -18,6 +18,7 @@ import axios from 'axios';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import moment from 'moment';
 import { useAuth } from '../../components/AuthContext';
+import { rolesAtLeast } from '../../lib/roles';
 
 const BACKEND_URL = ''; // relative — proxied through next.config.mjs's rewrite so the session cookie is same-origin, not third-party
 
@@ -99,9 +100,11 @@ export default function SignInSheetsPage() {
   // Read live from the fetched employee list, not the auth-context `user`
   // object — that claim is baked into the session JWT at login and can go
   // stale for hours after an admin grants/revokes it (same reasoning as the
-  // mandatory-topics permission check elsewhere in this app).
+  // mandatory-topics permission check elsewhere in this app). Deleting
+  // sign-in sheets is bundled into Senior Supervisor and up.
   const ownEmployeeRecord = employees.find((e: any) => e.id === user?.employeeId);
-  const canDeleteSheets = ownEmployeeRecord?.canDeleteSignInSheets === true;
+  const ownRole = ownEmployeeRecord ? ownEmployeeRecord.role : user?.role;
+  const canDeleteSheets = rolesAtLeast('seniorSupervisor').includes(ownRole);
 
   const relevantSessions = (sessions as Session[]).filter((s) => s.sheetImageCount > 0 || s.hasInserviceSheet);
   const grouped = groupByYearMonth(relevantSessions);

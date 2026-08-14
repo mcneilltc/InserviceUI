@@ -47,7 +47,15 @@ import moment from 'moment';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../components/AuthContext';
+import { rolesAtLeast } from '../../lib/roles';
 import ImportEmployeesDialog from './ImportEmployeesDialog';
+
+const ROLE_LABELS = {
+  admin: 'Admin',
+  seniorSupervisor: 'Senior Supervisor',
+  supervisor: 'Supervisor',
+  trainer: 'Trainer',
+};
 
 const CERTIFICATION_TYPE_SUGGESTIONS = [
   'Lifeguarding',
@@ -88,13 +96,8 @@ const ManageEmployees = () => {
     homeLocation: '',
     certifications: [],
     badgeNumber: '',
-    isSupervisor: false,
-    supervisorScope: 'locations',
-    isTrainer: false,
+    role: '',
     isExemptFromHoursRequirement: false,
-    canAddManualHours: true,
-    canManageMandatoryTopics: false,
-    canDeleteSignInSheets: false,
   });
   const [activeTab, setActiveTab] = useState(0);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
@@ -109,7 +112,6 @@ const ManageEmployees = () => {
   const [bulkCertType, setBulkCertType] = useState('');
   const [bulkCertExpiration, setBulkCertExpiration] = useState(moment());
   const [openImportDialog, setOpenImportDialog] = useState(false);
-  const [openBulkManualHoursDialog, setOpenBulkManualHoursDialog] = useState(false);
   const [addHoursEmployee, setAddHoursEmployee] = useState(null);
   const [addHoursData, setAddHoursData] = useState({ date: moment(), hours: '', topic: 'Inservice Training' });
 
@@ -123,20 +125,19 @@ const ManageEmployees = () => {
   });
   const error = queryError ? 'Failed to fetch employees' : null;
 
-  // The logged-in supervisor's own permission — gates the Add Hours dialog
-  // and the Excel import's historical-hours step. Read live from the
-  // employees list (not user.canAddManualHours from the auth context) —
-  // that claim is baked into the session JWT at login and can go stale for
+  // The logged-in user's own role — gates the Add Hours dialog, the Excel
+  // import's historical-hours step, and the Role field's editability below.
+  // Read live from the employees list (not user.role from the auth context)
+  // — that claim is baked into the session JWT at login and can go stale for
   // hours after an admin changes it here, so this page would otherwise keep
-  // showing a supervisor their own Add Hours button after it's been revoked
-  // (the backend still correctly rejects the request either way; this just
-  // keeps what's shown in sync with what's actually allowed). Missing/
-  // undefined (e.g. trainers, or a supervisor never explicitly restricted)
-  // defaults to allowed.
+  // showing stale capabilities after a promotion/demotion (the backend still
+  // correctly enforces the real boundary either way; this just keeps what's
+  // shown in sync with what's actually allowed).
   const ownEmployeeRecord = employees.find((e) => e.id === user?.employeeId);
-  const canAddManualHours = ownEmployeeRecord
-    ? ownEmployeeRecord.canAddManualHours !== false
-    : user?.canAddManualHours !== false;
+  const ownRole = ownEmployeeRecord ? ownEmployeeRecord.role : user?.role;
+  const isAdmin = ownRole === 'admin';
+  // Manual-hours-adding is bundled into Senior Supervisor and up.
+  const canAddManualHours = rolesAtLeast('seniorSupervisor').includes(ownRole);
 
   const { data: LOCATIONS = [] } = useQuery({
     queryKey: ['sites'],
@@ -213,22 +214,6 @@ const ManageEmployees = () => {
     onError: (err) => handleError(err, 'Failed to assign certification')
   });
 
-  const bulkManualHoursMutation = useMutation({
-    mutationFn: (updates) => axios.patch('/api/employees/manual-hours-permissions', { updates }),
-    onSuccess: (_response, updates) => {
-      queryClient.invalidateQueries({ queryKey: ['employees'] });
-      const enabling = updates[0]?.canAddManualHours;
-      setSnackbar({
-        open: true,
-        message: `Manual hours ${enabling ? 'enabled' : 'disabled'} for ${updates.length} supervisor${updates.length !== 1 ? 's' : ''}`,
-        severity: 'success',
-      });
-      setOpenBulkManualHoursDialog(false);
-      setSelectedEmployees([]);
-    },
-    onError: (err) => handleError(err, 'Failed to update manual-hours permissions')
-  });
-
   const backfillCertsMutation = useMutation({
     mutationFn: (promises) => Promise.all(promises),
     onSuccess: (results) => {
@@ -276,13 +261,8 @@ const ManageEmployees = () => {
         homeLocation: employee.homeLocation || (employee.locations && employee.locations[0]) || '',
         certifications: (employee.certifications || []).map((c) => ({ ...c, expirationDate: moment(c.expirationDate) })),
         badgeNumber: employee.badgeNumber || '',
-        isSupervisor: employee.isSupervisor || false,
-        supervisorScope: employee.supervisorScope || 'locations',
-        isTrainer: employee.isTrainer || false,
+        role: employee.role || '',
         isExemptFromHoursRequirement: employee.isExemptFromHoursRequirement || false,
-        canAddManualHours: employee.canAddManualHours !== false,
-        canManageMandatoryTopics: employee.canManageMandatoryTopics === true,
-        canDeleteSignInSheets: employee.canDeleteSignInSheets === true,
       });
     } else {
       setEditingEmployee(null);
@@ -296,13 +276,8 @@ const ManageEmployees = () => {
         homeLocation: '',
         certifications: [],
         badgeNumber: '',
-        isSupervisor: false,
-        supervisorScope: 'locations',
-        isTrainer: false,
+        role: '',
         isExemptFromHoursRequirement: false,
-        canAddManualHours: true,
-        canManageMandatoryTopics: false,
-        canDeleteSignInSheets: false,
       });
     }
     setOpenDialog(true);
@@ -321,11 +296,8 @@ const ManageEmployees = () => {
       homeLocation: '',
       certifications: [],
       badgeNumber: '',
-      isSupervisor: false,
-      supervisorScope: 'locations',
-      isTrainer: false,
+      role: '',
       isExemptFromHoursRequirement: false,
-      canAddManualHours: true,
     });
   };
 
@@ -352,8 +324,16 @@ const ManageEmployees = () => {
   };
 
   const handleSubmit = () => {
+    // role is only ever sent when this user is actually Admin — the Role
+    // select is disabled for everyone else, but its value still reflects
+    // whatever the loaded employee already had, and the backend treats the
+    // mere presence of a `role` key in the request as an attempted change
+    // requiring Admin. Omitting the key entirely for non-admins avoids a
+    // spurious 403 on an edit that never touched the role.
+    const { role, ...rest } = formData;
     const payload = {
-      ...formData,
+      ...rest,
+      ...(isAdmin ? { role: role || null } : {}),
       alternateEmails: formData.alternateEmails
         .split(',')
         .map((e) => e.trim())
@@ -460,18 +440,6 @@ const ManageEmployees = () => {
     bulkAssignCertMutation.mutate(promises);
   };
 
-  // Only selected employees who are supervisors are eligible — the flag is
-  // meaningless for anyone else, and the backend rejects the whole batch if
-  // a non-supervisor is included.
-  const selectedSupervisorIds = selectedEmployees.filter(
-    (id) => employees.find((emp) => emp.id === id)?.isSupervisor
-  );
-
-  const handleBulkSetManualHoursPermission = (canAddManualHours) => {
-    const updates = selectedSupervisorIds.map((employeeId) => ({ employeeId, canAddManualHours }));
-    bulkManualHoursMutation.mutate(updates);
-  };
-
   // Employees whose spreadsheet import stored a certification expiration date
   // but never got a matching entry in the certifications array the
   // Certifications/compliance page actually reads (fixed for new imports,
@@ -512,11 +480,7 @@ const ManageEmployees = () => {
     return matchesActiveTab && matchesLocation && matchesSearch;
   });
 
-  const getRoleLabel = (employee) => {
-    if (employee.isSupervisor) return employee.supervisorScope === 'all' ? 'Supervisor (all sites)' : 'Supervisor';
-    if (employee.isTrainer) return 'Trainer';
-    return '';
-  };
+  const getRoleLabel = (employee) => ROLE_LABELS[employee.role] || '';
 
   // Depth is stored as free text (e.g. "7ft"); pull out the leading number so
   // sorting is numeric ("7ft" < "13ft") instead of lexicographic ("13ft" < "7ft").
@@ -699,12 +663,6 @@ const ManageEmployees = () => {
             >
               Assign Certification to Selected ({selectedEmployees.length})
             </Button>
-            <Button
-              variant="outlined"
-              onClick={() => setOpenBulkManualHoursDialog(true)}
-            >
-              Manual-Hours Permission for Selected ({selectedEmployees.length})
-            </Button>
           </Box>
         )}
 
@@ -769,23 +727,17 @@ const ManageEmployees = () => {
                   </TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                      {employee.isSupervisor && (
+                      {employee.role && (
                         <Chip
-                          label={employee.supervisorScope === 'all' ? 'Supervisor (all sites)' : 'Supervisor'}
+                          label={ROLE_LABELS[employee.role] || employee.role}
                           size="small"
-                          color="secondary"
+                          color={employee.role === 'trainer' ? 'info' : 'secondary'}
                         />
-                      )}
-                      {employee.isTrainer && (
-                        <Chip label="Trainer" size="small" color="info" />
                       )}
                       {employee.isExemptFromHoursRequirement && (
                         <Chip label="Hours-exempt" size="small" variant="outlined" />
                       )}
-                      {employee.isSupervisor && employee.canAddManualHours === false && (
-                        <Chip label="No manual hours" size="small" variant="outlined" color="warning" />
-                      )}
-                      {!employee.isSupervisor && !employee.isTrainer && '—'}
+                      {!employee.role && '—'}
                     </Box>
                   </TableCell>
                   <TableCell>{moment(employee.hireDate).format('MMM D, YYYY')}</TableCell>
@@ -952,32 +904,27 @@ const ManageEmployees = () => {
                 />
               </Grid>
               <Grid size={12}>
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={formData.isSupervisor}
-                      onChange={(e) => setFormData({ ...formData, isSupervisor: e.target.checked })}
-                    />
-                  }
-                  label="This employee is a supervisor (gets dashboard access to track training hours)"
-                />
+                <FormControl fullWidth disabled={!isAdmin}>
+                  <InputLabel>Role</InputLabel>
+                  <Select
+                    value={formData.role}
+                    label="Role"
+                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                  >
+                    <MenuItem value="">No role (roster only, no login)</MenuItem>
+                    <MenuItem value="trainer">Trainer</MenuItem>
+                    <MenuItem value="supervisor">Supervisor</MenuItem>
+                    <MenuItem value="seniorSupervisor">Senior Supervisor</MenuItem>
+                    <MenuItem value="admin">Admin</MenuItem>
+                  </Select>
+                </FormControl>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                  {isAdmin
+                    ? 'Trainer leads sessions. Supervisor and up get dashboard access; Senior Supervisor and Admin see all sites, manage mandatory topics, add hours manually, and can delete sign-in sheets. Only Admin can manage other sites and roles.'
+                    : "Only an Admin can change an employee's role."}
+                </Typography>
               </Grid>
-              {formData.isSupervisor && (
-                <Grid size={12}>
-                  <FormControl fullWidth>
-                    <InputLabel>Supervisor Scope</InputLabel>
-                    <Select
-                      value={formData.supervisorScope}
-                      label="Supervisor Scope"
-                      onChange={(e) => setFormData({ ...formData, supervisorScope: e.target.value })}
-                    >
-                      <MenuItem value="locations">Their assigned location(s) only</MenuItem>
-                      <MenuItem value="all">All locations (company-wide)</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-              )}
-              {formData.isSupervisor && (
+              {rolesAtLeast('supervisor').includes(formData.role) && (
                 <Grid size={12}>
                   <FormControlLabel
                     control={
@@ -990,57 +937,7 @@ const ManageEmployees = () => {
                   />
                 </Grid>
               )}
-              {formData.isSupervisor && (
-                <Grid size={12}>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={formData.canAddManualHours}
-                        onChange={(e) => setFormData({ ...formData, canAddManualHours: e.target.checked })}
-                      />
-                    }
-                    label="Can manually add hours (Add Hours button and Excel import historical hours)"
-                  />
-                </Grid>
-              )}
-              {formData.isSupervisor && (
-                <Grid size={12}>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={formData.canManageMandatoryTopics}
-                        onChange={(e) => setFormData({ ...formData, canManageMandatoryTopics: e.target.checked })}
-                      />
-                    }
-                    label="Can manage mandatory monthly topics (sets which topics every trainer must cover each week, in Manage Topics)"
-                  />
-                </Grid>
-              )}
-              {formData.isSupervisor && (
-                <Grid size={12}>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={formData.canDeleteSignInSheets}
-                        onChange={(e) => setFormData({ ...formData, canDeleteSignInSheets: e.target.checked })}
-                      />
-                    }
-                    label="Can delete sign-in sheets (uploaded photos and generated PDFs, on the Sign-In Sheets page)"
-                  />
-                </Grid>
-              )}
-              <Grid size={12}>
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={formData.isTrainer}
-                      onChange={(e) => setFormData({ ...formData, isTrainer: e.target.checked })}
-                    />
-                  }
-                  label="This employee is a trainer (can lead training sessions, gets the trainer dashboard)"
-                />
-              </Grid>
-              {(formData.isSupervisor || formData.isTrainer) && (
+              {formData.role && (
                 <Grid size={12}>
                   <TextField
                     fullWidth
@@ -1137,51 +1034,6 @@ const ManageEmployees = () => {
               disabled={!bulkCertType || bulkAssignCertMutation.isPending}
             >
               Assign Certification
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        {/* Bulk Manual-Hours Permission Dialog — lets an admin grant/revoke
-            the "can manually add hours" permission (see the isSupervisor
-            checkbox in the edit dialog below) across many supervisors at
-            once instead of one at a time. */}
-        <Dialog open={openBulkManualHoursDialog} onClose={() => setOpenBulkManualHoursDialog(false)} maxWidth="sm" fullWidth>
-          <DialogTitle>
-            Manual-Hours Permission for Selected Employees
-          </DialogTitle>
-          <DialogContent>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-              This permission only applies to supervisors. Of the {selectedEmployees.length} selected employee
-              {selectedEmployees.length !== 1 ? 's' : ''}, {selectedSupervisorIds.length} {selectedSupervisorIds.length === 1 ? 'is a supervisor' : 'are supervisors'} and will be updated{selectedSupervisorIds.length < selectedEmployees.length ? ' — the rest will be left unchanged' : ''}.
-            </Typography>
-            {selectedSupervisorIds.length > 0 && (
-              <Stack spacing={0.5} sx={{ mt: 2 }}>
-                {selectedSupervisorIds.map((id) => {
-                  const emp = employees.find((e) => e.id === id);
-                  return (
-                    <Typography key={id} variant="body2">
-                      • {emp?.name}{emp?.canAddManualHours === false ? ' (currently disabled)' : ' (currently enabled)'}
-                    </Typography>
-                  );
-                })}
-              </Stack>
-            )}
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setOpenBulkManualHoursDialog(false)}>Cancel</Button>
-            <Button
-              onClick={() => handleBulkSetManualHoursPermission(false)}
-              color="warning"
-              disabled={selectedSupervisorIds.length === 0 || bulkManualHoursMutation.isPending}
-            >
-              Disable for Selected
-            </Button>
-            <Button
-              onClick={() => handleBulkSetManualHoursPermission(true)}
-              variant="contained"
-              disabled={selectedSupervisorIds.length === 0 || bulkManualHoursMutation.isPending}
-            >
-              Enable for Selected
             </Button>
           </DialogActions>
         </Dialog>

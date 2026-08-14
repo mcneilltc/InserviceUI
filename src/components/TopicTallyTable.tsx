@@ -59,7 +59,9 @@ interface TopicTallyTableProps {
 // filters, own data fetch, own export, so it drops into either page as-is.
 export default function TopicTallyTable({ endpoint, title, personLabel }: TopicTallyTableProps) {
   const { user } = useAuth();
-  const isScopedSupervisor = user?.role === 'supervisor' && user?.supervisorScope === 'locations';
+  // Site scope is fully implied by role now — only a plain Supervisor is
+  // location-scoped; Senior Supervisor/Admin are always all-site.
+  const isScopedSupervisor = user?.role === 'supervisor';
 
   const { data: allSites = [] } = useQuery({
     queryKey: ['sites'],

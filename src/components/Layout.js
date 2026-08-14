@@ -44,27 +44,38 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from './AuthContext';
 import BrandLogo from './BrandLogo';
+import { rolesAtLeast } from '../lib/roles';
 
 const drawerWidth = 240;
 
+// Display labels — the raw role strings (esp. 'seniorSupervisor') aren't fit
+// for showing to a user.
+const ROLE_LABELS = {
+  admin: 'Admin',
+  seniorSupervisor: 'Senior Supervisor',
+  supervisor: 'Supervisor',
+  trainer: 'Trainer',
+  employee: 'Employee',
+};
+
 const ALL_MENU_ITEMS = [
-  { text: 'Dashboard', icon: <DashboardIcon />, path: '/manager-dashboard', roles: ['supervisor'] },
+  { text: 'Dashboard', icon: <DashboardIcon />, path: '/manager-dashboard', roles: rolesAtLeast('supervisor') },
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/trainer-dashboard', roles: ['trainer'] },
-  { text: 'Add Training', icon: <AddIcon />, path: '/add-training', roles: ['supervisor', 'trainer'] },
-  { text: 'Upload Sheet', icon: <CloudUploadIcon />, path: '/upload-inservice', roles: ['supervisor', 'trainer'] },
-  { text: 'Sign-In Sheets', icon: <PhotoLibraryIcon />, path: '/sign-in-sheets', roles: ['supervisor', 'trainer'] },
-  { text: 'Certifications', icon: <VerifiedUserIcon />, path: '/certifications', roles: ['supervisor'] },
-  { text: 'Training Analytics', icon: <InsightsIcon />, path: '/training-analytics', roles: ['supervisor'] },
-  { text: 'Manage Employees', icon: <PeopleIcon />, path: '/manage-employees', roles: ['supervisor'] },
-  { text: 'Manage Topics', icon: <TopicIcon />, path: '/manage-topics', roles: ['supervisor'] },
-  { text: 'Manage Sites', icon: <LocationOnIcon />, path: '/manage-sites', roles: ['supervisor'] },
-  { text: 'Incentive Program', icon: <EmojiEventsIcon />, path: '/manage-incentives', roles: ['supervisor'] },
-  { text: 'Reports', icon: <AssessmentIcon />, path: '/reports', roles: ['supervisor', 'trainer'] },
-  { text: 'Employee Portal', icon: <PersonIcon />, path: '/employee', roles: ['supervisor', 'trainer'] },
+  { text: 'Add Training', icon: <AddIcon />, path: '/add-training', roles: rolesAtLeast('trainer') },
+  { text: 'Upload Sheet', icon: <CloudUploadIcon />, path: '/upload-inservice', roles: rolesAtLeast('trainer') },
+  { text: 'Sign-In Sheets', icon: <PhotoLibraryIcon />, path: '/sign-in-sheets', roles: rolesAtLeast('trainer') },
+  { text: 'Certifications', icon: <VerifiedUserIcon />, path: '/certifications', roles: rolesAtLeast('supervisor') },
+  { text: 'Training Analytics', icon: <InsightsIcon />, path: '/training-analytics', roles: rolesAtLeast('supervisor') },
+  { text: 'Manage Employees', icon: <PeopleIcon />, path: '/manage-employees', roles: rolesAtLeast('supervisor') },
+  { text: 'Manage Topics', icon: <TopicIcon />, path: '/manage-topics', roles: rolesAtLeast('supervisor') },
+  { text: 'Manage Sites', icon: <LocationOnIcon />, path: '/manage-sites', roles: rolesAtLeast('supervisor') },
+  { text: 'Incentive Program', icon: <EmojiEventsIcon />, path: '/manage-incentives', roles: rolesAtLeast('supervisor') },
+  { text: 'Reports', icon: <AssessmentIcon />, path: '/reports', roles: rolesAtLeast('trainer') },
+  { text: 'Employee Portal', icon: <PersonIcon />, path: '/employee', roles: rolesAtLeast('trainer') },
   // When I Work integration commented out of production for now — both of
   // these depend on backend routes currently unmounted in app.ts. Restore
   // together with the app.ts route mounts when re-enabling.
-  // { text: 'Shift Attendance', icon: <EventBusyIcon />, path: '/shift-attendance', roles: ['supervisor'] },
+  // { text: 'Shift Attendance', icon: <EventBusyIcon />, path: '/shift-attendance', roles: rolesAtLeast('supervisor') },
   // { text: 'Shifts', icon: <EventAvailableIcon />, path: '/shifts', roles: ['employee'] },
 ];
 
@@ -174,7 +185,7 @@ const Layout = ({ children }) => {
             {user && (
               <>
                 <Typography variant="body2" sx={{ display: { xs: 'none', md: 'block' } }} noWrap>
-                  Hi {user.name || user.email} ({user.role})
+                  Hi {user.name || user.email} ({ROLE_LABELS[user.role] || user.role})
                 </Typography>
                 <Button color="inherit" size="small" startIcon={<LogoutIcon />} onClick={logout}>
                   Logout

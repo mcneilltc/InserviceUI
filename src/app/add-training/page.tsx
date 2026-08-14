@@ -62,6 +62,7 @@ import moment from "moment";
 import { exportTableToPdf } from "../../utils/pdfExport";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../components/AuthContext";
+import { rolesAtLeast } from "../../lib/roles";
 
 const BACKEND_URL = ''; // relative — proxied through next.config.mjs's rewrite so the session cookie is same-origin, not third-party
 import { QRCodeCanvas } from "qrcode.react";
@@ -73,7 +74,9 @@ const ACTION_BUTTON_SX = { p: 1.25 } as const;
 
 const AddTraining = () => {
   const { user } = useAuth();
-  const isSupervisor = user?.role === 'supervisor';
+  // Supervisor and up — not just the plain 'supervisor' tier — must retain
+  // what plain Supervisor could always do here (adding a new topic type).
+  const isSupervisor = rolesAtLeast('supervisor').includes(user?.role);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -133,10 +136,10 @@ const AddTraining = () => {
   // (e.g. "First Aid", "Other") — keyed by topic name.
   const [topicDetails, setTopicDetails] = useState<Record<string, string>>({});
 
-  // Trainers are employees with isTrainer === true, plus supervisors (who can
-  // also lead training) — no separate collection. isTrainer still separately
-  // controls who lands on the Trainer Portal vs. Manager Portal.
-  const trainers = employees.filter((e: any) => e.isTrainer || e.isSupervisor);
+  // Trainers are employees with any role set — every tier can lead training,
+  // not just the 'trainer' role itself. The role field separately controls
+  // which portal (Trainer vs Manager) they land on.
+  const trainers = employees.filter((e: any) => !!e.role);
 
   const { data: trainingSessions = [] as any[] } = useQuery({
     queryKey: ['sessions'],

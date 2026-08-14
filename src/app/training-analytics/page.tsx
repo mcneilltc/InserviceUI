@@ -93,7 +93,9 @@ const LINE_COLORS = ['#0090C7', '#00B893', '#e65100', '#c62828', '#6a1b9a', '#00
 
 export default function TrainingAnalyticsPage() {
   const { user } = useAuth();
-  const isScopedSupervisor = user?.role === 'supervisor' && user?.supervisorScope === 'locations';
+  // Site scope is fully implied by role now — only a plain Supervisor is
+  // location-scoped; Senior Supervisor/Admin are always all-site.
+  const isScopedSupervisor = user?.role === 'supervisor';
 
   const { data: allSites = [] } = useQuery({
     queryKey: ['sites'],

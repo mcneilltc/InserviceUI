@@ -59,7 +59,9 @@ const BACKEND_URL = ''; // relative — proxied through next.config.mjs's rewrit
 const ManagerDashboard = () => {
   const router = useRouter();
   const { user } = useAuth();
-  const isScopedSupervisor = user?.role === 'supervisor' && user?.supervisorScope === 'locations';
+  // Site scope is fully implied by role now — only a plain Supervisor is
+  // location-scoped; Senior Supervisor/Admin are always all-site.
+  const isScopedSupervisor = user?.role === 'supervisor';
 
   // Local filter/sort just for the Completed Trainings and Recent Check-Ins
   // lists — independent of the page-wide location filter above, which also
