@@ -469,6 +469,7 @@ const AddTraining = () => {
 
       queryClient.invalidateQueries({ queryKey: ['sessions'] });
       queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['compliance-status'] });
 
       const { employeesCredited, totalEmployeeHours, trainersCredited } = response.data;
       setSnackbar({

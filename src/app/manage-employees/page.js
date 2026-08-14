@@ -168,6 +168,9 @@ const ManageEmployees = () => {
     mutationFn: (data) => axios.put(`/api/employees/${data.id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] });
+      // Covers the hours-exemption toggle in this same edit form, which the
+      // manager dashboard's compliance-status view has no other way to learn about.
+      queryClient.invalidateQueries({ queryKey: ['compliance-status'] });
       setSnackbar({ open: true, message: 'Employee updated successfully', severity: 'success' });
       handleCloseDialog();
     },
@@ -199,6 +202,7 @@ const ManageEmployees = () => {
     mutationFn: (promises) => Promise.all(promises),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['certifications'] });
       setSnackbar({ open: true, message: 'Certification assigned to selected employees', severity: 'success' });
       setOpenBulkCertDialog(false);
       setSelectedEmployees([]);
@@ -228,6 +232,7 @@ const ManageEmployees = () => {
     mutationFn: (promises) => Promise.all(promises),
     onSuccess: (results) => {
       queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['certifications'] });
       setSnackbar({
         open: true,
         message: `Backfilled Lifeguarding certification for ${results.length} employee${results.length !== 1 ? 's' : ''}`,
@@ -241,6 +246,7 @@ const ManageEmployees = () => {
     mutationFn: ({ employeeId, ...sessionData }) => axios.post(`/api/training-sessions/${employeeId}`, sessionData),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['compliance-status'] });
       setSnackbar({ open: true, message: 'Hours added successfully', severity: 'success' });
       handleCloseAddHoursDialog();
     },

@@ -121,6 +121,10 @@ const ManagerDashboard = () => {
     }
   };
 
+  const handleDownloadComplianceLetter = (employee) => {
+    window.open(`/api/compliance/letter/${employee.id}/download`, '_blank');
+  };
+
   // Sites/employees/sessions use the same queryKeys as add-training and
   // trainer-dashboard — visiting one of those pages first means this
   // dashboard can reuse that cached data instead of refetching it (see the
@@ -779,6 +783,13 @@ const ManagerDashboard = () => {
                                       <SendIcon fontSize="small" />
                                     </IconButton>
                                   </span>
+                                </Tooltip>
+                              )}
+                              {emp.status !== 'complete' && (
+                                <Tooltip title="Download Compliance Letter PDF">
+                                  <IconButton size="small" onClick={() => handleDownloadComplianceLetter(emp)}>
+                                    <DownloadIcon fontSize="small" />
+                                  </IconButton>
                                 </Tooltip>
                               )}
                             </Box>
