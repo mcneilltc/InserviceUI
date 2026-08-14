@@ -33,12 +33,20 @@ import { AdapterMoment } from '@mui/x-date-pickers/AdapterMoment';
 import axios from 'axios';
 import moment from 'moment';
 import { useQuery } from '@tanstack/react-query';
+import TopicTallyTable from '../../components/TopicTallyTable';
 
 const REPORT_TYPES = [
   { value: 'checkins', label: 'Check-Ins' },
   { value: 'hours', label: 'Employee Hours' },
   { value: 'completed', label: 'Completed Trainings' },
+  { value: 'employeeTopics', label: 'Employee Topics' },
+  { value: 'trainerTopics', label: 'Trainer Topics' },
 ];
+
+// These two report types have their own filters (period/month/year, not a
+// date range) and a dynamic topic-columns table — they bypass the
+// COLUMNS-driven generic report UI below entirely.
+const TOPIC_TALLY_REPORT_TYPES = new Set(['employeeTopics', 'trainerTopics']);
 
 const STATUS_LABELS = { complete: 'Complete', atRisk: 'At Risk', incomplete: 'Incomplete', exempt: 'Exempt', pendingCertification: 'Pending Certification' };
 const STATUS_COLORS = { complete: 'success', atRisk: 'warning', incomplete: 'error', exempt: 'default', pendingCertification: 'default' };
@@ -218,6 +226,15 @@ const Reports = () => {
           ))}
         </Tabs>
 
+        {reportType === 'employeeTopics' && (
+          <TopicTallyTable endpoint="/api/topic-tally/employees" title="Employee Topics" personLabel="Employee" />
+        )}
+        {reportType === 'trainerTopics' && (
+          <TopicTallyTable endpoint="/api/topic-tally/trainers" title="Trainer Topics" personLabel="Trainer" />
+        )}
+
+        {!TOPIC_TALLY_REPORT_TYPES.has(reportType) && (
+        <>
         <Grid container spacing={2} sx={{ mb: 4 }}>
           {/* Date Range Filters */}
           <Grid size={{ xs: 12, md: 6 }}>
@@ -341,6 +358,8 @@ const Reports = () => {
             combination with zero matches doesn't look like the button did nothing */}
         {hasSearched && !loading && !error && reportData.length === 0 && (
           <Alert severity="info">{emptyStateMessage}</Alert>
+        )}
+        </>
         )}
       </Paper>
     </Container>
