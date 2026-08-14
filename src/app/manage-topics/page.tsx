@@ -30,6 +30,7 @@ import axios from 'axios';
 import moment from 'moment';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../components/AuthContext';
+import { rolesAtLeast } from '../../lib/roles';
 
 interface Topic {
   id: string;
@@ -83,9 +84,9 @@ const ManageTopics = () => {
     }
   });
   const ownEmployeeRecord = employees.find((e) => e.id === user?.employeeId);
-  const canManageSchedule = ownEmployeeRecord
-    ? ownEmployeeRecord.canManageMandatoryTopics === true
-    : user?.canManageMandatoryTopics === true;
+  const ownRole = ownEmployeeRecord ? ownEmployeeRecord.role : user?.role;
+  // Managing the schedule is bundled into Senior Supervisor and up.
+  const canManageSchedule = rolesAtLeast('seniorSupervisor').includes(ownRole);
 
   const { data: scheduleData } = useQuery({
     queryKey: ['mandatoryTopicsSchedule', scheduleMonth],

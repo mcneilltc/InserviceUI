@@ -20,6 +20,7 @@ import {
 } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../../components/AuthContext';
+import { rolesAtLeast } from '../../lib/roles';
 
 const BACKEND_URL = ''; // relative — proxied through next.config.mjs's rewrite so the session cookie is same-origin, not third-party
 
@@ -66,7 +67,8 @@ function computeDurationHours(startTime: string, endTime: string): string {
 // ---------------------------------------------------------------------------
 export default function UploadInservicePage() {
   const { user } = useAuth();
-  const isSupervisor = user?.role === 'supervisor';
+  // Supervisor and up — not just the plain 'supervisor' tier.
+  const isSupervisor = rolesAtLeast('supervisor').includes(user?.role);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Upload / extract state — multiple pages: sign-in sheet page(s) + a topics-checklist page
@@ -80,9 +82,9 @@ export default function UploadInservicePage() {
 
   // Lookups returned by the backend alongside extraction
   const [lookups, setLookups] = useState<{
-    trainers: { id: string; name: string; email: string }[];
+    trainers: { id: string; name: string; email: string; role: string | null }[];
     topics: { id: string; name: string; requiresDetail?: boolean }[];
-    employees: { id: string; name: string; email: string; isSupervisor: boolean }[];
+    employees: { id: string; name: string; email: string; role: string | null }[];
   } | null>(null);
 
   // The editable review form
@@ -318,7 +320,7 @@ export default function UploadInservicePage() {
 
     // 1-trainer-to-12-employee ratio, waived if any selected trainer is also a supervisor.
     const isExemptFromRatio = form.trainers.some(trainerId =>
-      lookups?.trainers.find(t => t.id === trainerId)?.isSupervisor
+      rolesAtLeast('supervisor').includes(lookups?.trainers.find(t => t.id === trainerId)?.role)
     );
 
     if (!isExemptFromRatio) {
@@ -754,7 +756,7 @@ export default function UploadInservicePage() {
 
                 {form.trainers.length > 0 && (() => {
                   const isExempt = form.trainers.some(trainerId =>
-                    lookups?.trainers.find(t => t.id === trainerId)?.isSupervisor
+                    rolesAtLeast('supervisor').includes(lookups?.trainers.find(t => t.id === trainerId)?.role)
                   );
                   const maxTrainees = form.trainers.length * 12;
                   const confirmedCount = form.employees.filter(e => e.matchedId).length;

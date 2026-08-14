@@ -4,17 +4,21 @@ import React, { useState } from 'react';
 import {
   Box, Container, Typography, Accordion, AccordionSummary, AccordionDetails,
   Grid, Card, CardContent, Chip, Stack, CircularProgress, Alert, Dialog,
-  DialogContent, IconButton, Button,
+  DialogTitle, DialogContent, DialogActions, IconButton, Button, Snackbar,
 } from '@mui/material';
 import {
   ExpandMore as ExpandMoreIcon,
   Close as CloseIcon,
   PhotoLibrary as PhotoLibraryIcon,
   Description as DescriptionIcon,
+  Download as DownloadIcon,
+  Delete as DeleteIcon,
 } from '@mui/icons-material';
 import axios from 'axios';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import moment from 'moment';
+import { useAuth } from '../../components/AuthContext';
+import { rolesAtLeast } from '../../lib/roles';
 
 const BACKEND_URL = ''; // relative — proxied through next.config.mjs's rewrite so the session cookie is same-origin, not third-party
 
@@ -64,10 +68,16 @@ function groupByYearMonth(sessions: Session[]) {
 }
 
 export default function SignInSheetsPage() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [imagesByMonth, setImagesByMonth] = useState<Record<string, Record<string, string[]>>>({});
   const [loadingMonth, setLoadingMonth] = useState<string | null>(null);
-  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
-  const [downloadingSheetId, setDownloadingSheetId] = useState<string | null>(null);
+  const [lightbox, setLightbox] = useState<{ url: string; sessionId: string; monthKey: string; index: number } | null>(null);
+  const [loadingSheetId, setLoadingSheetId] = useState<string | null>(null);
+  const [sheetModal, setSheetModal] = useState<{ sessionId: string; viewUrl: string; downloadUrl: string; label: string } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ type: 'sheet' | 'photo'; sessionId: string; monthKey?: string; index?: number } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
   const { data: sessions = [] as Session[], isLoading, error } = useQuery({
     queryKey: ['sessions'],
@@ -87,16 +97,59 @@ export default function SignInSheetsPage() {
 
   const trainerName = (id: string) => employees.find((e) => e.id === id)?.name || id;
 
+  // Read live from the fetched employee list, not the auth-context `user`
+  // object — that claim is baked into the session JWT at login and can go
+  // stale for hours after an admin grants/revokes it (same reasoning as the
+  // mandatory-topics permission check elsewhere in this app). Deleting
+  // sign-in sheets is bundled into Senior Supervisor and up.
+  const ownEmployeeRecord = employees.find((e: any) => e.id === user?.employeeId);
+  const ownRole = ownEmployeeRecord ? ownEmployeeRecord.role : user?.role;
+  const canDeleteSheets = rolesAtLeast('seniorSupervisor').includes(ownRole);
+
   const relevantSessions = (sessions as Session[]).filter((s) => s.sheetImageCount > 0 || s.hasInserviceSheet);
   const grouped = groupByYearMonth(relevantSessions);
 
-  const downloadInserviceSheet = async (sessionId: string) => {
-    setDownloadingSheetId(sessionId);
+  const openInserviceSheet = async (session: Session) => {
+    setLoadingSheetId(session.id);
     try {
-      const { data } = await axios.get(`${BACKEND_URL}/api/sessions/${sessionId}/inservice-sheet`);
-      window.open(data.url, '_blank');
+      const { data } = await axios.get(`${BACKEND_URL}/api/sessions/${session.id}/inservice-sheet`);
+      setSheetModal({
+        sessionId: session.id,
+        viewUrl: data.url,
+        downloadUrl: data.downloadUrl,
+        label: `${moment(session.date).format('MMM D, YYYY')} — ${session.location}`,
+      });
     } finally {
-      setDownloadingSheetId(null);
+      setLoadingSheetId(null);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!confirmDelete) return;
+    setDeleting(true);
+    try {
+      if (confirmDelete.type === 'sheet') {
+        await axios.delete(`${BACKEND_URL}/api/sessions/${confirmDelete.sessionId}/inservice-sheet`);
+        setSheetModal(null);
+      } else {
+        await axios.delete(`${BACKEND_URL}/api/sessions/${confirmDelete.sessionId}/images/${confirmDelete.index}`);
+        setImagesByMonth((prev) => {
+          const monthKey = confirmDelete.monthKey as string;
+          const monthImages = { ...(prev[monthKey] || {}) };
+          monthImages[confirmDelete.sessionId] = (monthImages[confirmDelete.sessionId] || [])
+            .filter((_, i) => i !== confirmDelete.index);
+          return { ...prev, [monthKey]: monthImages };
+        });
+        setLightbox(null);
+      }
+      queryClient.invalidateQueries({ queryKey: ['sessions'] });
+      setSnackbar({ open: true, message: confirmDelete.type === 'sheet' ? 'Sign-in sheet deleted' : 'Photo deleted', severity: 'success' });
+      setConfirmDelete(null);
+    } catch (error: any) {
+      const message = error.response?.data?.message || error.response?.data?.error?.message || 'Failed to delete';
+      setSnackbar({ open: true, message, severity: 'error' });
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -182,8 +235,8 @@ export default function SignInSheetsPage() {
                                   <Button
                                     size="small"
                                     startIcon={<DescriptionIcon />}
-                                    disabled={downloadingSheetId === session.id}
-                                    onClick={() => downloadInserviceSheet(session.id)}
+                                    disabled={loadingSheetId === session.id}
+                                    onClick={() => openInserviceSheet(session)}
                                   >
                                     Sign-In Sheet
                                   </Button>
@@ -198,7 +251,7 @@ export default function SignInSheetsPage() {
                                     component="img"
                                     src={url}
                                     alt={`Sign-in sheet ${i + 1}`}
-                                    onClick={() => setLightboxUrl(url)}
+                                    onClick={() => setLightbox({ url, sessionId: session.id, monthKey, index: i })}
                                     sx={{
                                       width: 96, height: 96, objectFit: 'cover',
                                       borderRadius: 1, cursor: 'pointer',
@@ -220,19 +273,97 @@ export default function SignInSheetsPage() {
         </Accordion>
       ))}
 
-      <Dialog open={!!lightboxUrl} onClose={() => setLightboxUrl(null)} maxWidth="lg">
+      <Dialog open={!!sheetModal} onClose={() => setSheetModal(null)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+          {sheetModal?.label}
+          <IconButton onClick={() => setSheetModal(null)} size="small">
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ p: 0, height: '75vh' }}>
+          {sheetModal && (
+            <Box
+              component="iframe"
+              src={sheetModal.viewUrl}
+              title="Sign-in sheet preview"
+              sx={{ width: '100%', height: '100%', border: 0, display: 'block' }}
+            />
+          )}
+        </DialogContent>
+        <DialogActions>
+          {canDeleteSheets && (
+            <Button
+              color="error"
+              startIcon={<DeleteIcon />}
+              onClick={() => sheetModal && setConfirmDelete({ type: 'sheet', sessionId: sheetModal.sessionId })}
+              sx={{ mr: 'auto' }}
+            >
+              Delete
+            </Button>
+          )}
+          <Button
+            variant="contained"
+            startIcon={<DownloadIcon />}
+            onClick={() => sheetModal && window.open(sheetModal.downloadUrl, '_blank')}
+          >
+            Download
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!lightbox} onClose={() => setLightbox(null)} maxWidth="lg">
         <IconButton
-          onClick={() => setLightboxUrl(null)}
+          onClick={() => setLightbox(null)}
           sx={{ position: 'absolute', right: 8, top: 8, bgcolor: 'background.paper' }}
         >
           <CloseIcon />
         </IconButton>
         <DialogContent sx={{ p: 0 }}>
-          {lightboxUrl && (
-            <Box component="img" src={lightboxUrl} alt="Sign-in sheet" sx={{ width: '100%', display: 'block' }} />
+          {lightbox && (
+            <Box component="img" src={lightbox.url} alt="Sign-in sheet" sx={{ width: '100%', display: 'block' }} />
           )}
         </DialogContent>
+        {canDeleteSheets && (
+          <DialogActions>
+            <Button
+              color="error"
+              startIcon={<DeleteIcon />}
+              onClick={() => lightbox && setConfirmDelete({ type: 'photo', sessionId: lightbox.sessionId, monthKey: lightbox.monthKey, index: lightbox.index })}
+            >
+              Delete Photo
+            </Button>
+          </DialogActions>
+        )}
       </Dialog>
+
+      <Dialog open={!!confirmDelete} onClose={() => setConfirmDelete(null)}>
+        <DialogTitle>
+          {confirmDelete?.type === 'sheet' ? 'Delete this sign-in sheet?' : 'Delete this photo?'}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            {confirmDelete?.type === 'sheet'
+              ? "This permanently removes the generated PDF sign-in sheet for this session. This can't be undone."
+              : "This permanently removes the uploaded photo. This can't be undone."}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDelete(null)}>Never Mind</Button>
+          <Button onClick={handleConfirmDelete} color="error" variant="contained" disabled={deleting}>
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+      >
+        <Alert severity={snackbar.severity} onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 }

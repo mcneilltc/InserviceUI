@@ -52,7 +52,9 @@ const STATUS_CONFIG: Record<CertStatus['status'], { label: (cert: CertStatus) =>
 
 export default function CertificationsPage() {
   const { user } = useAuth();
-  const isScopedSupervisor = user?.role === 'supervisor' && user?.supervisorScope === 'locations';
+  // Site scope is fully implied by role now — only a plain Supervisor is
+  // location-scoped; Senior Supervisor/Admin are always all-site.
+  const isScopedSupervisor = user?.role === 'supervisor';
 
   const { data: SITES = [] } = useQuery({
     queryKey: ['sites'],

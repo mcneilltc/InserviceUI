@@ -59,7 +59,9 @@ const BACKEND_URL = ''; // relative — proxied through next.config.mjs's rewrit
 const ManagerDashboard = () => {
   const router = useRouter();
   const { user } = useAuth();
-  const isScopedSupervisor = user?.role === 'supervisor' && user?.supervisorScope === 'locations';
+  // Site scope is fully implied by role now — only a plain Supervisor is
+  // location-scoped; Senior Supervisor/Admin are always all-site.
+  const isScopedSupervisor = user?.role === 'supervisor';
 
   // Local filter/sort just for the Completed Trainings and Recent Check-Ins
   // lists — independent of the page-wide location filter above, which also
@@ -119,6 +121,10 @@ const ManagerDashboard = () => {
     if (window.confirm(`Send a compliance letter to ${employee.name}?`)) {
       sendLetterMutation.mutate(employee.id);
     }
+  };
+
+  const handleDownloadComplianceLetter = (employee) => {
+    window.open(`/api/compliance/letter/${employee.id}/download`, '_blank');
   };
 
   // Sites/employees/sessions use the same queryKeys as add-training and
@@ -779,6 +785,13 @@ const ManagerDashboard = () => {
                                       <SendIcon fontSize="small" />
                                     </IconButton>
                                   </span>
+                                </Tooltip>
+                              )}
+                              {emp.status !== 'complete' && (
+                                <Tooltip title="Download Compliance Letter PDF">
+                                  <IconButton size="small" onClick={() => handleDownloadComplianceLetter(emp)}>
+                                    <DownloadIcon fontSize="small" />
+                                  </IconButton>
                                 </Tooltip>
                               )}
                             </Box>
