@@ -678,14 +678,8 @@ const ManageEmployees = () => {
                   />
                 </TableCell>
                 <TableCell>Name</TableCell>
-                <TableCell>Email</TableCell>
-                <TableCell>Position</TableCell>
-                <TableCell>Badge #</TableCell>
-                <TableCell>Home Location</TableCell>
-                <TableCell>Depth</TableCell>
-                <TableCell>Locations</TableCell>
                 <TableCell>Role</TableCell>
-                <TableCell>Hire Date</TableCell>
+                <TableCell>Home Location</TableCell>
                 <TableCell>Actions</TableCell>
               </TableRow>
             </TableHead>
@@ -707,24 +701,6 @@ const ManageEmployees = () => {
                       {employee.name}
                     </Link>
                   </TableCell>
-                  <TableCell>{employee.email}</TableCell>
-                  <TableCell>{employee.position}</TableCell>
-                  <TableCell>{employee.badgeNumber || '—'}</TableCell>
-                  <TableCell>{employee.homeLocation || '—'}</TableCell>
-                  <TableCell>{employee.depth || '—'}</TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                      {(employee.locations || []).map((location) => (
-                        <Chip
-                          key={location}
-                          label={location}
-                          size="small"
-                          color="primary"
-                          variant="outlined"
-                        />
-                      ))}
-                    </Box>
-                  </TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
                       {employee.role && (
@@ -740,7 +716,7 @@ const ManageEmployees = () => {
                       {!employee.role && '—'}
                     </Box>
                   </TableCell>
-                  <TableCell>{moment(employee.hireDate).format('MMM D, YYYY')}</TableCell>
+                  <TableCell>{employee.homeLocation || '—'}</TableCell>
                   <TableCell>
                     {activeTab === 0 ? (
                       <>

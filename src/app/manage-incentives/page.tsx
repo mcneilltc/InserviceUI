@@ -25,6 +25,12 @@ import {
   Tooltip,
   Chip,
   Snackbar,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  ToggleButtonGroup,
+  ToggleButton,
 } from '@mui/material';
 import {
   CheckCircle as CheckCircleIcon,
@@ -32,6 +38,7 @@ import {
   Remove as RemoveIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
+  EditNote as EditNoteIcon,
 } from '@mui/icons-material';
 import axios from 'axios';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -45,6 +52,17 @@ interface Tier {
   rewardLabel: string;
 }
 
+interface MonthEntry {
+  year: number;
+  month: number;
+  hours: number;
+  qualified: boolean | undefined;
+  isOverride?: boolean;
+  overrideNote?: string;
+  overrideSetByName?: string;
+  overrideSetAt?: string;
+}
+
 interface EmployeeStatus {
   employeeId: string;
   name: string;
@@ -52,6 +70,7 @@ interface EmployeeStatus {
   hoursByThe15th: number;
   hoursNeeded: number;
   qualifiedThisMonth: boolean | undefined;
+  qualifiedThisMonthIsOverride?: boolean;
   deadlinePassed: boolean;
   currentStreak: number;
   currentTier: Tier | null;
@@ -61,7 +80,7 @@ interface EmployeeStatus {
     year: number;
     monthsQualified: number;
     monthsDecided: number;
-    months: { year: number; month: number; hours: number; qualified: boolean | undefined }[];
+    months: MonthEntry[];
   };
 }
 
@@ -82,6 +101,16 @@ export default function ManageIncentivesPage() {
   const [editStreakLength, setEditStreakLength] = useState('');
   const [editRewardLabel, setEditRewardLabel] = useState('');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
+
+  const [overrideDialog, setOverrideDialog] = useState<{
+    employeeId: string;
+    employeeName: string;
+    year: number;
+    month: number;
+    hasExisting: boolean;
+    qualified: boolean;
+    note: string;
+  } | null>(null);
 
   const { data: tiers = [] } = useQuery<Tier[]>({
     queryKey: ['incentive-tiers'],
@@ -138,6 +167,66 @@ export default function ManageIncentivesPage() {
     },
     onError: (err) => handleError(err, 'Failed to delete tier'),
   });
+
+  const setOverrideMutation = useMutation({
+    mutationFn: (payload: { employeeId: string; year: number; month: number; qualified: boolean; note?: string }) =>
+      axios.put(`${BACKEND_URL}/api/incentives/override`, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['incentive-status'] });
+      setOverrideDialog(null);
+      setSnackbar({ open: true, message: 'Incentive override saved', severity: 'success' });
+    },
+    onError: (err) => handleError(err, 'Failed to save override'),
+  });
+
+  const clearOverrideMutation = useMutation({
+    mutationFn: ({ employeeId, year, month }: { employeeId: string; year: number; month: number }) =>
+      axios.delete(`${BACKEND_URL}/api/incentives/override/${employeeId}/${year}/${month}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['incentive-status'] });
+      setOverrideDialog(null);
+      setSnackbar({ open: true, message: 'Override cleared', severity: 'success' });
+    },
+    onError: (err) => handleError(err, 'Failed to clear override'),
+  });
+
+  const isFutureMonth = (year: number, month: number) => {
+    const target = moment({ year, month: month - 1, day: 1 });
+    return target.isAfter(moment().startOf('month'));
+  };
+
+  const openOverrideDialog = (employee: EmployeeStatus, m: MonthEntry) => {
+    if (isFutureMonth(m.year, m.month)) return;
+    setOverrideDialog({
+      employeeId: employee.employeeId,
+      employeeName: employee.name,
+      year: m.year,
+      month: m.month,
+      hasExisting: !!m.isOverride,
+      qualified: m.isOverride ? !!m.qualified : (m.qualified ?? true),
+      note: m.overrideNote || '',
+    });
+  };
+
+  const handleSaveOverride = () => {
+    if (!overrideDialog) return;
+    setOverrideMutation.mutate({
+      employeeId: overrideDialog.employeeId,
+      year: overrideDialog.year,
+      month: overrideDialog.month,
+      qualified: overrideDialog.qualified,
+      note: overrideDialog.note.trim() || undefined,
+    });
+  };
+
+  const handleClearOverride = () => {
+    if (!overrideDialog) return;
+    clearOverrideMutation.mutate({
+      employeeId: overrideDialog.employeeId,
+      year: overrideDialog.year,
+      month: overrideDialog.month,
+    });
+  };
 
   const handleAddTier = () => {
     const streakLength = parseInt(newStreakLength, 10);
@@ -301,13 +390,20 @@ export default function ManageIncentivesPage() {
                         <TableCell>{e.homeLocation}</TableCell>
                         <TableCell>{e.hoursByThe15th} / 4</TableCell>
                         <TableCell>
-                          {e.qualifiedThisMonth === true ? (
-                            <Chip size="small" color="success" icon={<CheckCircleIcon />} label="Qualified" />
-                          ) : e.qualifiedThisMonth === false ? (
-                            <Chip size="small" color="error" icon={<CancelIcon />} label="Missed" />
-                          ) : (
-                            <Chip size="small" color="warning" label="In Progress" />
-                          )}
+                          <Stack direction="row" spacing={0.5} alignItems="center">
+                            {e.qualifiedThisMonth === true ? (
+                              <Chip size="small" color="success" icon={<CheckCircleIcon />} label="Qualified" />
+                            ) : e.qualifiedThisMonth === false ? (
+                              <Chip size="small" color="error" icon={<CancelIcon />} label="Missed" />
+                            ) : (
+                              <Chip size="small" color="warning" label="In Progress" />
+                            )}
+                            {e.qualifiedThisMonthIsOverride && (
+                              <Tooltip title="Manually set by a supervisor">
+                                <EditNoteIcon fontSize="small" color="action" />
+                              </Tooltip>
+                            )}
+                          </Stack>
                         </TableCell>
                         <TableCell>{e.currentStreak}</TableCell>
                         <TableCell>{e.currentTier?.rewardLabel || '—'}</TableCell>
@@ -340,19 +436,47 @@ export default function ManageIncentivesPage() {
                       <TableRow key={e.employeeId}>
                         <TableCell>{e.name}</TableCell>
                         <TableCell>{e.homeLocation}</TableCell>
-                        {e.annual.months.map((m) => (
-                          <TableCell key={m.month} align="center">
-                            {m.qualified === undefined ? (
-                              <Tooltip title="Still in progress">
-                                <RemoveIcon fontSize="small" color="disabled" />
+                        {e.annual.months.map((m) => {
+                          const editable = !isFutureMonth(m.year, m.month);
+                          const icon = m.qualified === undefined ? (
+                            <RemoveIcon fontSize="small" color="disabled" />
+                          ) : m.qualified ? (
+                            <CheckCircleIcon fontSize="small" color="success" />
+                          ) : (
+                            <CancelIcon fontSize="small" color="error" />
+                          );
+                          const tooltipTitle = m.isOverride
+                            ? `Manually set by ${m.overrideSetByName || 'a supervisor'}${m.overrideSetAt ? ` on ${moment(m.overrideSetAt).format('MMM D, YYYY')}` : ''}${m.overrideNote ? ` — ${m.overrideNote}` : ''}`
+                            : m.qualified === undefined ? 'Still in progress' : editable ? 'Click to correct this month' : '';
+                          return (
+                            <TableCell key={m.month} align="center">
+                              <Tooltip title={tooltipTitle}>
+                                <Box
+                                  onClick={editable ? () => openOverrideDialog(e, m) : undefined}
+                                  sx={{
+                                    position: 'relative',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    width: 28,
+                                    height: 28,
+                                    borderRadius: 1,
+                                    cursor: editable ? 'pointer' : 'default',
+                                    '&:hover': editable ? { bgcolor: 'action.hover' } : undefined,
+                                  }}
+                                >
+                                  {icon}
+                                  {m.isOverride && (
+                                    <EditNoteIcon
+                                      sx={{ position: 'absolute', bottom: -2, right: -2, fontSize: 12 }}
+                                      color="action"
+                                    />
+                                  )}
+                                </Box>
                               </Tooltip>
-                            ) : m.qualified ? (
-                              <CheckCircleIcon fontSize="small" color="success" />
-                            ) : (
-                              <CancelIcon fontSize="small" color="error" />
-                            )}
-                          </TableCell>
-                        ))}
+                            </TableCell>
+                          );
+                        })}
                         <TableCell align="center">
                           <Chip size="small" label={`${e.annual.monthsQualified}/${e.annual.monthsDecided}`} color={e.annual.monthsQualified > 0 ? 'success' : 'default'} />
                         </TableCell>
@@ -373,6 +497,56 @@ export default function ManageIncentivesPage() {
       >
         <Alert severity={snackbar.severity}>{snackbar.message}</Alert>
       </Snackbar>
+
+      <Dialog open={!!overrideDialog} onClose={() => setOverrideDialog(null)} maxWidth="xs" fullWidth>
+        {overrideDialog && (
+          <>
+            <DialogTitle>
+              {overrideDialog.employeeName} — {moment().month(overrideDialog.month - 1).format('MMMM')} {overrideDialog.year}
+            </DialogTitle>
+            <DialogContent>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Manually correct whether this month counts as qualified for the incentive program — useful when a
+                paper sign-in sheet surfaces after the fact, or hours were logged under the wrong date.
+              </Typography>
+              <ToggleButtonGroup
+                exclusive
+                fullWidth
+                value={overrideDialog.qualified}
+                onChange={(_e, value) => value !== null && setOverrideDialog({ ...overrideDialog, qualified: value })}
+                sx={{ mb: 2 }}
+              >
+                <ToggleButton value={true} color="success">
+                  Qualified
+                </ToggleButton>
+                <ToggleButton value={false} color="error">
+                  Not Qualified
+                </ToggleButton>
+              </ToggleButtonGroup>
+              <TextField
+                label="Note (optional)"
+                fullWidth
+                multiline
+                minRows={2}
+                value={overrideDialog.note}
+                onChange={(e) => setOverrideDialog({ ...overrideDialog, note: e.target.value })}
+                placeholder="e.g. Paper sign-in sheet found for this month"
+              />
+            </DialogContent>
+            <DialogActions>
+              {overrideDialog.hasExisting && (
+                <Button color="error" onClick={handleClearOverride} sx={{ mr: 'auto' }}>
+                  Clear Override
+                </Button>
+              )}
+              <Button onClick={() => setOverrideDialog(null)}>Cancel</Button>
+              <Button variant="contained" onClick={handleSaveOverride}>
+                Save
+              </Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
     </Container>
   );
 }

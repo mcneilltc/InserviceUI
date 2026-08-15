@@ -3,8 +3,8 @@
 import React, { useState } from 'react';
 import {
   Box, Container, Typography, Accordion, AccordionSummary, AccordionDetails,
-  Grid, Card, CardContent, Chip, Stack, CircularProgress, Alert, Dialog,
-  DialogTitle, DialogContent, DialogActions, IconButton, Button, Snackbar,
+  List, ListItem, Divider, Chip, Stack, CircularProgress, Alert, Dialog,
+  DialogTitle, DialogContent, DialogActions, IconButton, Button, Snackbar, Tooltip,
 } from '@mui/material';
 import {
   ExpandMore as ExpandMoreIcon,
@@ -74,7 +74,7 @@ export default function SignInSheetsPage() {
   const [loadingMonth, setLoadingMonth] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<{ url: string; sessionId: string; monthKey: string; index: number } | null>(null);
   const [loadingSheetId, setLoadingSheetId] = useState<string | null>(null);
-  const [sheetModal, setSheetModal] = useState<{ sessionId: string; viewUrl: string; downloadUrl: string; label: string } | null>(null);
+  const [sheetModal, setSheetModal] = useState<{ sessionId: string; viewUrl: string; downloadUrl: string; label: string; isLegacyFormat: boolean } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ type: 'sheet' | 'photo'; sessionId: string; monthKey?: string; index?: number } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
@@ -118,6 +118,7 @@ export default function SignInSheetsPage() {
         viewUrl: data.url,
         downloadUrl: data.downloadUrl,
         label: `${moment(session.date).format('MMM D, YYYY')} — ${session.location}`,
+        isLegacyFormat: !!data.isLegacyFormat,
       });
     } finally {
       setLoadingSheetId(null);
@@ -156,18 +157,17 @@ export default function SignInSheetsPage() {
   // Signed URLs expire 5 minutes after they're issued (see
   // getSignedSheetImageUrl in the backend), so photos are fetched lazily —
   // only for the month a supervisor actually opens — rather than minting
-  // URLs for every session up front.
+  // URLs for every session up front. One batched request for the whole
+  // month instead of one round trip per session — a month with N sessions
+  // used to fire N separate API calls (plus a Firestore read each) just to
+  // find out which photos exist, before any image had even started loading.
   const loadMonthImages = async (monthKey: string, monthSessions: Session[]) => {
     if (imagesByMonth[monthKey]) return;
     setLoadingMonth(monthKey);
     try {
-      const results = await Promise.all(
-        monthSessions.map(async (s) => {
-          const { data } = await axios.get(`${BACKEND_URL}/api/sessions/${s.id}/images`);
-          return [s.id, data.urls as string[]] as const;
-        })
-      );
-      setImagesByMonth((prev) => ({ ...prev, [monthKey]: Object.fromEntries(results) }));
+      const sessionIds = monthSessions.map((s) => s.id).join(',');
+      const { data } = await axios.get(`${BACKEND_URL}/api/sessions/images-batch`, { params: { sessionIds } });
+      setImagesByMonth((prev) => ({ ...prev, [monthKey]: data }));
     } finally {
       setLoadingMonth(null);
     }
@@ -201,71 +201,82 @@ export default function SignInSheetsPage() {
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography>{label} ({monthSessions.length})</Typography>
                 </AccordionSummary>
-                <AccordionDetails>
-                  {loadingMonth === monthKey && <CircularProgress size={24} />}
-                  <Grid container spacing={2}>
-                    {monthSessions.map((session) => (
-                      <Grid size={{ xs: 12, md: 6 }} key={session.id}>
-                        <Card variant="outlined">
-                          <CardContent>
-                            <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-                              <Box>
-                                <Typography variant="subtitle1">
-                                  {moment(session.date).format('MMM D, YYYY')} — {session.location}
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                  Trainer: {(session.trainer || []).map(trainerName).join(', ') || 'Unknown'}
-                                </Typography>
-                                <Stack direction="row" spacing={0.5} sx={{ mt: 0.5, flexWrap: 'wrap', gap: 0.5 }}>
-                                  {(session.topics || []).map((topic) => (
-                                    <Chip key={topic} label={topic} size="small" />
-                                  ))}
-                                </Stack>
-                              </Box>
-                              <Stack spacing={0.5} alignItems="flex-end">
-                                {session.sheetImageCount > 0 && (
-                                  <Chip
-                                    icon={<PhotoLibraryIcon />}
-                                    label={session.sheetImageCount}
-                                    size="small"
-                                    variant="outlined"
-                                  />
-                                )}
-                                {session.hasInserviceSheet && (
-                                  <Button
-                                    size="small"
-                                    startIcon={<DescriptionIcon />}
-                                    disabled={loadingSheetId === session.id}
-                                    onClick={() => openInserviceSheet(session)}
-                                  >
-                                    Sign-In Sheet
-                                  </Button>
-                                )}
-                              </Stack>
+                <AccordionDetails sx={{ p: 0 }}>
+                  {loadingMonth === monthKey && <CircularProgress size={24} sx={{ m: 2 }} />}
+                  <List disablePadding>
+                    {monthSessions.map((session, sessionIndex) => (
+                      <React.Fragment key={session.id}>
+                        {sessionIndex > 0 && <Divider component="li" />}
+                        <ListItem alignItems="flex-start" sx={{ py: 2, gap: 2, flexWrap: 'wrap' }}>
+                          <Box sx={{ flex: 1, minWidth: 240 }}>
+                            <Typography variant="subtitle1">
+                              {moment(session.date).format('MMM D, YYYY')} — {session.location}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              Trainer: {(session.trainer || []).map(trainerName).join(', ') || 'Unknown'}
+                            </Typography>
+                            <Stack direction="row" spacing={0.5} sx={{ mt: 0.5, flexWrap: 'wrap', gap: 0.5 }}>
+                              {(session.topics || []).map((topic) => (
+                                <Chip key={topic} label={topic} size="small" />
+                              ))}
                             </Stack>
-
-                            <Grid container spacing={1} sx={{ mt: 1 }}>
-                              {(imagesByMonth[monthKey]?.[session.id] || []).map((url, i) => (
-                                <Grid key={i}>
+                            {(imagesByMonth[monthKey]?.[session.id] || []).length > 0 && (
+                              <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap', gap: 1 }}>
+                                {(imagesByMonth[monthKey]?.[session.id] || []).map((url, i) => (
                                   <Box
+                                    key={i}
                                     component="img"
                                     src={url}
                                     alt={`Sign-in sheet ${i + 1}`}
+                                    loading="lazy"
                                     onClick={() => setLightbox({ url, sessionId: session.id, monthKey, index: i })}
                                     sx={{
-                                      width: 96, height: 96, objectFit: 'cover',
+                                      width: 64, height: 64, objectFit: 'cover',
                                       borderRadius: 1, cursor: 'pointer',
                                       border: '1px solid', borderColor: 'divider',
                                     }}
                                   />
-                                </Grid>
-                              ))}
-                            </Grid>
-                          </CardContent>
-                        </Card>
-                      </Grid>
+                                ))}
+                              </Stack>
+                            )}
+                          </Box>
+                          <Stack direction="row" spacing={0.5} alignItems="center" sx={{ flexShrink: 0 }}>
+                            {session.sheetImageCount > 0 && (
+                              <Chip
+                                icon={<PhotoLibraryIcon />}
+                                label={session.sheetImageCount}
+                                size="small"
+                                variant="outlined"
+                              />
+                            )}
+                            {session.hasInserviceSheet && (
+                              <>
+                                <Button
+                                  size="small"
+                                  startIcon={<DescriptionIcon />}
+                                  disabled={loadingSheetId === session.id}
+                                  onClick={() => openInserviceSheet(session)}
+                                >
+                                  Sign-In Sheet
+                                </Button>
+                                {canDeleteSheets && (
+                                  <Tooltip title="Delete Sign-In Sheet">
+                                    <IconButton
+                                      size="small"
+                                      color="error"
+                                      onClick={() => setConfirmDelete({ type: 'sheet', sessionId: session.id })}
+                                    >
+                                      <DeleteIcon fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+                                )}
+                              </>
+                            )}
+                          </Stack>
+                        </ListItem>
+                      </React.Fragment>
                     ))}
-                  </Grid>
+                  </List>
                 </AccordionDetails>
               </Accordion>
             ))}
@@ -282,12 +293,29 @@ export default function SignInSheetsPage() {
         </DialogTitle>
         <DialogContent sx={{ p: 0, height: '75vh' }}>
           {sheetModal && (
-            <Box
-              component="iframe"
-              src={sheetModal.viewUrl}
-              title="Sign-in sheet preview"
-              sx={{ width: '100%', height: '100%', border: 0, display: 'block' }}
-            />
+            sheetModal.isLegacyFormat ? (
+              // A Word document from before the PDF rewrite — no browser can
+              // render this inline, so don't even try (an iframe here just
+              // shows a blank page and, depending on the browser, silently
+              // downloads it instead of previewing).
+              <Box sx={{
+                width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center', gap: 2, p: 4, textAlign: 'center',
+              }}>
+                <DescriptionIcon sx={{ fontSize: 48, color: 'text.secondary' }} />
+                <Typography color="text.secondary">
+                  This sign-in sheet was generated before sheets switched to PDF, and is still a Word
+                  document — your browser can&apos;t preview it here. Use Download to open it.
+                </Typography>
+              </Box>
+            ) : (
+              <Box
+                component="iframe"
+                src={sheetModal.viewUrl}
+                title="Sign-in sheet preview"
+                sx={{ width: '100%', height: '100%', border: 0, display: 'block' }}
+              />
+            )
           )}
         </DialogContent>
         <DialogActions>
