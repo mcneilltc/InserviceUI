@@ -59,7 +59,25 @@ export interface Employee {
   hasSlideCert?: boolean;
   hasSwimCert?: boolean;
   isEliteSupervisor?: boolean;
+  // Profile fields — shown here rather than in the Manage Employees table
+  // row, which only carries what's useful for scanning a list.
+  email?: string;
+  position?: string;
+  locations?: string[];
+  role?: string | null;
+  hireDate?: string;
 }
+
+// Mirrored in Layout.js and manage-employees/page.js — the two packages
+// share no lib today, so this stays a tiny, easy-to-eyeball-verify copy
+// rather than a shared import (see utils/roles.ts for the same reasoning
+// applied to the role hierarchy itself).
+const ROLE_LABELS: Record<string, string> = {
+  admin: 'Admin',
+  seniorSupervisor: 'Senior Supervisor',
+  supervisor: 'Supervisor',
+  trainer: 'Trainer',
+};
 
 export interface IncentiveTier {
   id: string;
@@ -170,9 +188,26 @@ export default function EmployeeComplianceView({ employee, compliance, sessions,
               <Typography variant="h5" fontWeight="bold">
                 {employee.firstName} {employee.lastName}
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                Badge #{employee.badgeNumber} · {employee.location}
-              </Typography>
+              <Box sx={{ mb: 1.5 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Badge #{employee.badgeNumber} · {employee.location}
+                  {employee.position && ` · ${employee.position}`}
+                  {employee.role && ` · ${ROLE_LABELS[employee.role] || employee.role}`}
+                </Typography>
+                {employee.email && (
+                  <Typography variant="body2" color="text.secondary">
+                    {employee.email}
+                  </Typography>
+                )}
+                {(employee.hireDate || (employee.locations && employee.locations.length > 0)) && (
+                  <Typography variant="body2" color="text.secondary">
+                    {[
+                      employee.hireDate && `Hired ${moment(employee.hireDate).format('MMM D, YYYY')}`,
+                      employee.locations && employee.locations.length > 0 && `Locations: ${employee.locations.join(', ')}`,
+                    ].filter(Boolean).join(' · ')}
+                  </Typography>
+                )}
+              </Box>
 
               <Chip
                 icon={status.icon}
