@@ -20,6 +20,7 @@
     "date-fns": "^4.1.0",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
+    "moment-timezone": "^0.6.3",
     "next": "^15.5.22",
     "qrcode.react": "^4.2.0",
     "react": "^17.0.0 || ^18.0.0 || ^19.0.0",

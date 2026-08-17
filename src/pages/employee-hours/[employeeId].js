@@ -100,30 +100,25 @@ const EmployeeHours = () => {
     setFilteredSessions(filtered);
   };
 
-  // Calculate total training hours
+  // Calculate total training hours. These are per-employee credited session
+  // records (see performCloseOut in sessionCloseOutService.ts) — they only
+  // ever store a `length` (hours), never a startTime/endTime, since credited
+  // duration comes from real elapsed check-in-to-close-out time, not a
+  // scheduled time-of-day.
   const calculateTotalHours = () => {
-    return filteredSessions.reduce((total, session) => {
-      const start = moment(`${session.date}T${session.startTime}`);
-      const end = moment(`${session.date}T${session.endTime}`);
-      return total + end.diff(start, 'hours', true);
-    }, 0);
+    return filteredSessions.reduce((total, session) => total + (parseFloat(session.length) || 0), 0);
   };
 
   // Export to CSV
   const exportToCSV = () => {
-    const headers = ['Date', 'Topic', 'Start Time', 'End Time', 'Duration (hours)', 'Location', 'Trainer', 'Status'];
+    const headers = ['Date', 'Topic', 'Duration (hours)', 'Location', 'Trainer', 'Status'];
     const csvContent = [
       headers.join(','),
       ...filteredSessions.map(session => {
-        const start = moment(`${session.date}T${session.startTime}`);
-        const end = moment(`${session.date}T${session.endTime}`);
-        const duration = end.diff(start, 'hours', true);
         return [
           session.date,
           `"${(session.topics || (session.topic ? [session.topic] : [])).join('; ')}"`,
-          session.startTime,
-          session.endTime,
-          duration,
+          parseFloat(session.length) || 0,
           `"${session.location}"`,
           `"${session.trainer}"`,
           session.status
@@ -142,12 +137,16 @@ const EmployeeHours = () => {
     document.body.removeChild(link);
   };
 
-  // Convert training sessions to calendar events
+  // Convert training sessions to calendar events. These credited records
+  // have no time-of-day (see calculateTotalHours above) — only a date and a
+  // duration — so each shows as an all-day event on its date rather than a
+  // fabricated time slot.
   const events = filteredSessions.map((session) => ({
     id: session.id,
     title: (session.topics || (session.topic ? [session.topic] : [])).join(', '),
-    start: new Date(`${session.date}T${session.startTime}`),
-    end: new Date(`${session.date}T${session.endTime}`),
+    start: moment(session.date).startOf('day').toDate(),
+    end: moment(session.date).startOf('day').toDate(),
+    allDay: true,
     resource: session,
   }));
 
@@ -164,7 +163,7 @@ const EmployeeHours = () => {
       >
         <Typography variant="subtitle2">{event.title}</Typography>
         <Typography variant="caption" display="block">
-          {moment(event.start).format('h:mm A')} - {moment(event.end).format('h:mm A')}
+          {(parseFloat(event.resource.length) || 0).toFixed(1)} hour(s)
         </Typography>
       </Box>
     );
@@ -305,7 +304,7 @@ const EmployeeHours = () => {
             onSelectEvent={handleEventClick}
             views={['month', 'week', 'day']}
             defaultView="month"
-            tooltipAccessor={(event) => `${event.title} (${moment(event.start).format('h:mm A')} - ${moment(event.end).format('h:mm A')})`}
+            tooltipAccessor={(event) => `${event.title} (${(parseFloat(event.resource.length) || 0).toFixed(1)} hour(s))`}
           />
         </Box>
       </Paper>
@@ -324,7 +323,7 @@ const EmployeeHours = () => {
                   <strong>Date:</strong> {moment(selectedSession.date).format('MMMM D, YYYY')}
                 </Typography>
                 <Typography variant="subtitle1" gutterBottom>
-                  <strong>Time:</strong> {selectedSession.startTime} - {selectedSession.endTime}
+                  <strong>Duration:</strong> {(parseFloat(selectedSession.length) || 0).toFixed(1)} hour(s)
                 </Typography>
                 <Typography variant="subtitle1" gutterBottom>
                   <strong>Location:</strong> {selectedSession.location}

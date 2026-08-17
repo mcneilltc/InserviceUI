@@ -1,6 +1,7 @@
 "use client";
 
 import "../lib/axiosConfig";
+import "../lib/timezone"; // side effect only — pins moment's default zone; see that file
 import "./globals.css";
 import { ThemeProvider } from "@mui/material/styles";
 import InitColorSchemeScript from "@mui/material/InitColorSchemeScript";

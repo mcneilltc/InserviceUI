@@ -4,7 +4,7 @@ import React from 'react';
 import {
   Box, Card, CardContent, Typography, Chip,
   List, ListItem, ListItemText, ListItemIcon, Divider,
-  Stack, Alert,
+  Stack, Alert, IconButton, Tooltip as MuiTooltip,
 } from '@mui/material';
 import {
   CheckCircle as CheckCircleIcon,
@@ -15,6 +15,7 @@ import {
   EmojiEvents as EmojiEventsIcon,
   LocalFireDepartment as StreakIcon,
   Info as InfoIcon,
+  Edit as EditIcon,
 } from '@mui/icons-material';
 import { Doughnut } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
@@ -141,9 +142,16 @@ export interface EmployeeComplianceViewProps {
   compliance: ComplianceInfo;
   sessions: Session[];
   incentive?: IncentiveInfo;
+  // Only passed by the manager-facing employee detail page — the self-service
+  // view (an employee looking at their own record) renders this same
+  // component without it, so no edit affordance shows there. Correcting
+  // already-credited hours (e.g. someone left before close-out) is a
+  // Senior-Supervisor-and-up action, enforced for real server-side; this
+  // just decides whether to show the button.
+  onEditSessionHours?: (session: Session) => void;
 }
 
-export default function EmployeeComplianceView({ employee, compliance, sessions, incentive }: EmployeeComplianceViewProps) {
+export default function EmployeeComplianceView({ employee, compliance, sessions, incentive, onEditSessionHours }: EmployeeComplianceViewProps) {
   const status = statusConfig[compliance.status];
   const endOfMonthTarget = compliance.thresholds.endOfMonth;
   const filledHours = Math.min(compliance.hoursThisMonth, endOfMonthTarget);
@@ -333,6 +341,13 @@ export default function EmployeeComplianceView({ employee, compliance, sessions,
                       color="primary"
                       variant="outlined"
                     />
+                    {onEditSessionHours && (
+                      <MuiTooltip title="Correct hours (e.g. left before close-out)">
+                        <IconButton size="small" onClick={() => onEditSessionHours(s)} sx={{ ml: 0.5 }}>
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </MuiTooltip>
+                    )}
                   </ListItem>
                   {idx < sessions.length - 1 && <Divider />}
                 </React.Fragment>
