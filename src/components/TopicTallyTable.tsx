@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Paper,
   Typography,
@@ -21,9 +21,11 @@ import {
   TableBody,
   TableRow,
   TableCell,
+  TablePagination,
   Button,
+  InputAdornment,
 } from '@mui/material';
-import { FileDownload as FileDownloadIcon } from '@mui/icons-material';
+import { FileDownload as FileDownloadIcon, Search as SearchIcon } from '@mui/icons-material';
 import axios from 'axios';
 import moment from 'moment';
 import { useQuery } from '@tanstack/react-query';
@@ -109,12 +111,50 @@ export default function TopicTallyTable({ endpoint, title, personLabel }: TopicT
   const topics = data?.topics ?? [];
   const rows = data?.rows ?? [];
 
+  // Which topic columns to show — narrowing this is what actually shrinks a
+  // wide table back to a reasonable width, unlike the row filters below.
+  const [topicFilters, setTopicFilters] = useState<string[]>(['all']);
+  const isAllTopics = topicFilters.includes('all');
+  const visibleTopics = isAllTopics ? topics : topics.filter((t) => topicFilters.includes(t));
+
+  const handleTopicFilterChange = (event: any) => {
+    const { value } = event.target;
+    const selected: string[] = typeof value === 'string' ? value.split(',') : value;
+    if (selected.length === 0 || selected[selected.length - 1] === 'all') {
+      setTopicFilters(['all']);
+    } else {
+      setTopicFilters(selected.filter((v) => v !== 'all'));
+    }
+  };
+
+  const [nameQuery, setNameQuery] = useState('');
+  const filteredRows = useMemo(() => {
+    const q = nameQuery.trim().toLowerCase();
+    return q ? rows.filter((row) => row.name.toLowerCase().includes(q)) : rows;
+  }, [rows, nameQuery]);
+
+  const ROWS_PER_PAGE = 10;
+  const [page, setPage] = useState(0);
+  // A new fetch (period/site change) or a narrower search/topic selection
+  // can easily leave `page` pointing past the end of the new result set —
+  // reset to the first page any time what's being paginated changes,
+  // including the topic-set reset below (a stale topic selection from a
+  // previous period could otherwise silently filter everything out).
+  useEffect(() => {
+    setPage(0);
+  }, [data, nameQuery, topicFilters]);
+  useEffect(() => {
+    setTopicFilters(['all']);
+  }, [data]);
+
+  const pagedRows = filteredRows.slice(page * ROWS_PER_PAGE, page * ROWS_PER_PAGE + ROWS_PER_PAGE);
+
   const handleDownload = () => {
     const periodLabel = period === 'month' ? moment(month, 'YYYY-MM').format('MMMM YYYY') : year;
     exportTableToPdf({
       title: `${title} — ${periodLabel}`,
-      headers: [personLabel, 'Location', ...topics, 'Total'],
-      rows: rows.map((row) => [row.name, row.location, ...topics.map((t) => row.counts[t] || 0), row.total]),
+      headers: [personLabel, 'Location', ...visibleTopics, 'Total'],
+      rows: filteredRows.map((row) => [row.name, row.location, ...visibleTopics.map((t) => row.counts[t] || 0), row.total]),
       filenamePrefix: `${title}_${periodLabel}`,
     });
   };
@@ -179,6 +219,46 @@ export default function TopicTallyTable({ endpoint, title, personLabel }: TopicT
         )}
       </Stack>
 
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3 }}>
+        <TextField
+          label={`Search by ${personLabel.toLowerCase()} name`}
+          value={nameQuery}
+          onChange={(e) => setNameQuery(e.target.value)}
+          fullWidth
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" />
+              </InputAdornment>
+            ),
+          }}
+        />
+
+        <FormControl fullWidth>
+          <InputLabel>Topics</InputLabel>
+          <Select
+            multiple
+            value={topicFilters}
+            label="Topics"
+            onChange={handleTopicFilterChange}
+            renderValue={(selected) =>
+              (selected as string[]).includes('all') ? 'All Topics' : (selected as string[]).join(', ')
+            }
+          >
+            <MenuItem value="all">
+              <Checkbox checked={isAllTopics} />
+              <ListItemText primary="All Topics" />
+            </MenuItem>
+            {topics.map((topic) => (
+              <MenuItem key={topic} value={topic}>
+                <Checkbox checked={topicFilters.includes(topic)} />
+                <ListItemText primary={topic} />
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      </Stack>
+
       {isLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
           <CircularProgress />
@@ -188,6 +268,10 @@ export default function TopicTallyTable({ endpoint, title, personLabel }: TopicT
       ) : rows.length === 0 ? (
         <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
           No {personLabel.toLowerCase()} training found for the selected period and site(s).
+        </Typography>
+      ) : filteredRows.length === 0 ? (
+        <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
+          No {personLabel.toLowerCase()} matches &quot;{nameQuery}&quot;.
         </Typography>
       ) : (
         <>
@@ -202,18 +286,18 @@ export default function TopicTallyTable({ endpoint, title, personLabel }: TopicT
                 <TableRow>
                   <TableCell>{personLabel}</TableCell>
                   <TableCell>Location</TableCell>
-                  {topics.map((topic) => (
+                  {visibleTopics.map((topic) => (
                     <TableCell key={topic} align="right">{topic}</TableCell>
                   ))}
                   <TableCell align="right"><strong>Total</strong></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {rows.map((row) => (
+                {pagedRows.map((row) => (
                   <TableRow key={row.id}>
                     <TableCell>{row.name}</TableCell>
                     <TableCell>{row.location}</TableCell>
-                    {topics.map((topic) => (
+                    {visibleTopics.map((topic) => (
                       <TableCell key={topic} align="right">{row.counts[topic] || ''}</TableCell>
                     ))}
                     <TableCell align="right"><strong>{row.total}</strong></TableCell>
@@ -222,6 +306,14 @@ export default function TopicTallyTable({ endpoint, title, personLabel }: TopicT
               </TableBody>
             </Table>
           </TableContainer>
+          <TablePagination
+            component="div"
+            count={filteredRows.length}
+            page={page}
+            onPageChange={(_, newPage) => setPage(newPage)}
+            rowsPerPage={ROWS_PER_PAGE}
+            rowsPerPageOptions={[ROWS_PER_PAGE]}
+          />
         </>
       )}
     </Paper>
