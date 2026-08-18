@@ -139,12 +139,21 @@ const ManageEmployees = () => {
   // Manual-hours-adding is bundled into Senior Supervisor and up.
   const canAddManualHours = rolesAtLeast('seniorSupervisor').includes(ownRole);
 
+  // queryFn returns the raw site objects (not just names) — this page's
+  // ImportEmployeesDialog child shares this same ['sites'] cache entry and
+  // needs each site's fullName too (for matching a spreadsheet's Site
+  // column against full names, not just acronyms). Since this page's own
+  // query is what's already mounted by the time that dialog opens, if its
+  // queryFn returned bare strings there'd be nothing left to derive
+  // fullName from — select (evaluated per-observer, unlike queryFn) is
+  // what keeps LOCATIONS itself unchanged as a plain string array.
   const { data: LOCATIONS = [] } = useQuery({
     queryKey: ['sites'],
     queryFn: async () => {
       const response = await axios.get('/api/sites');
-      return response.data.map(s => s.name);
-    }
+      return response.data;
+    },
+    select: (sites) => sites.map((s) => s.name),
   });
 
   const handleError = (err, defaultMessage) => {

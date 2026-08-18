@@ -38,6 +38,7 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
+  CircularProgress,
 } from "@mui/material";
 import {
   Edit as EditIcon,
@@ -53,6 +54,9 @@ import {
   FilterList as FilterListIcon,
   QrCode2 as QrCodeIcon,
   ContentCopy as ContentCopyIcon,
+  HowToReg as HowToRegIcon,
+  Logout as LogoutIcon,
+  Undo as UndoIcon,
 } from "@mui/icons-material";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
@@ -83,7 +87,7 @@ const AddTraining = () => {
     date: null,
     location: "",
     startTime: "",
-    length: "",
+    endTime: "",
     topics: [] as string[],
     trainer: [],
     status: "scheduled", // scheduled, in-progress, completed
@@ -166,6 +170,13 @@ const AddTraining = () => {
   });
   const [selectedSessionForManualAdd, setSelectedSessionForManualAdd] = useState(null);
   const [qrDialogSession, setQrDialogSession] = useState(null);
+  // "Manage Attendance" dialog — lets a trainer mark a specific checked-in
+  // employee as having left early, mid-session, so close-out credits them
+  // for real elapsed attendance instead of the whole session's duration.
+  const [attendanceSession, setAttendanceSession] = useState(null);
+  const [attendanceCheckins, setAttendanceCheckins] = useState([]);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
+  const [checkoutActionId, setCheckoutActionId] = useState(null);
   // A single confirm dialog reused for actions that are hard to undo (Archive,
   // Cancel Training, Close Out) — a safety net so a mis-tap among the tightly
   // clustered action icons doesn't silently take effect.
@@ -177,20 +188,38 @@ const AddTraining = () => {
     onConfirm: () => void;
   } | null>(null);
 
-  // Generate time options (every 30 minutes from 8 AM to 6 PM)
-  const timeOptions = Array.from({ length: 21 }, (_, i) => {
-    const hour = Math.floor(i / 2) + 8;
-    const minute = i % 2 === 0 ? "00" : "30";
+  // Generate time options (every 15 minutes from 8 AM to 10 PM — the wider
+  // range vs. the old 8-6 gives late-starting sessions room for an end time
+  // within the same dropdown).
+  const timeOptions = Array.from({ length: 57 }, (_, i) => {
+    const totalMinutes = 8 * 60 + i * 15;
+    const hour = Math.floor(totalMinutes / 60);
+    const minute = totalMinutes % 60;
     const period = hour >= 12 ? "PM" : "AM";
     const formattedHour = hour > 12 ? hour - 12 : hour; // Convert to 12-hour format
-    return `${formattedHour.toString().padStart(2, "0")}:${minute} ${period}`;
+    return `${formattedHour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")} ${period}`;
   });
+
+  // End Time only ever offers times after the selected Start Time.
+  const endTimeOptions = formData.startTime
+    ? timeOptions.filter((t) => moment(t, "hh:mm A").isAfter(moment(formData.startTime, "hh:mm A")))
+    : timeOptions;
 
   const handleChange = (field) => (event) => {
     setFormData((prev) => ({
       ...prev,
       [field]: event.target.value,
     }));
+  };
+
+  // Clears End Time if it's no longer after the newly-picked Start Time,
+  // instead of silently submitting a stale (now-invalid) end time.
+  const handleStartTimeChange = (event) => {
+    const newStart = event.target.value;
+    setFormData((prev) => {
+      const endStillValid = prev.endTime && moment(prev.endTime, "hh:mm A").isAfter(moment(newStart, "hh:mm A"));
+      return { ...prev, startTime: newStart, endTime: endStillValid ? prev.endTime : "" };
+    });
   };
 
   const handleDateChange = (date) => {
@@ -272,7 +301,7 @@ const AddTraining = () => {
         date: null,
         location: "",
         startTime: "",
-        length: "",
+        endTime: "",
         topics: [],
         trainer: [],
         status: "scheduled",
@@ -308,8 +337,12 @@ const AddTraining = () => {
         setSnackbar({ open: true, message: "Please select at least one topic", severity: "error" });
         return;
     }
-    if (!formData.length) {
-        setSnackbar({ open: true, message: "Please enter session length", severity: "error" });
+    if (!formData.startTime) {
+        setSnackbar({ open: true, message: "Please select a start time", severity: "error" });
+        return;
+    }
+    if (!formData.endTime) {
+        setSnackbar({ open: true, message: "Please select an end time", severity: "error" });
         return;
     }
     const missingDetail = formData.topics.find(
@@ -323,14 +356,21 @@ const AddTraining = () => {
       const detail = topicDetails[name]?.trim();
       return detail ? `${name} — ${detail}` : name;
     });
+    // Every other producer of `length` (close-out, Upload Sheet) stores
+    // hours, so derive it from start/end here to keep the field
+    // unit-consistent wherever it's later read as hours.
+    const lengthHours = Math.round(
+      (moment(formData.endTime, "hh:mm A").diff(moment(formData.startTime, "hh:mm A"), "minutes") / 60) * 100
+    ) / 100;
+    if (lengthHours <= 0) {
+        setSnackbar({ open: true, message: "End time must be after start time", severity: "error" });
+        return;
+    }
     const sessionData = {
       date: moment(formData.date).format('YYYY-MM-DD'),
       location: formData.location,
       startTime: formData.startTime || undefined,
-      // Form collects minutes; every other producer of `length` (close-out,
-      // Upload Sheet) stores hours, so convert here to keep the field
-      // unit-consistent wherever it's later read as hours.
-      length: Math.round((parseInt(formData.length, 10) / 60) * 100) / 100,
+      length: lengthHours,
       topics: resolvedTopics,
       trainer: formData.trainer,
       trainees: []
@@ -466,6 +506,56 @@ const AddTraining = () => {
         message: "Failed to load session data",
         severity: "error",
       });
+    }
+  };
+
+  const loadAttendance = async (sessionId) => {
+    setAttendanceLoading(true);
+    try {
+      const { data } = await axios.get(`${BACKEND_URL}/api/checkin/session/${sessionId}`);
+      setAttendanceCheckins(data);
+    } catch (error) {
+      console.error("Error loading attendance:", error);
+      setSnackbar({ open: true, message: "Failed to load attendance", severity: "error" });
+    } finally {
+      setAttendanceLoading(false);
+    }
+  };
+
+  const handleOpenAttendance = (session) => {
+    setAttendanceSession(session);
+    loadAttendance(session.id);
+  };
+
+  const handleCloseAttendance = () => {
+    setAttendanceSession(null);
+    setAttendanceCheckins([]);
+  };
+
+  const handleMarkLeftEarly = async (checkinId) => {
+    setCheckoutActionId(checkinId);
+    try {
+      await axios.post(`${BACKEND_URL}/api/checkin/${checkinId}/checkout`, {});
+      await loadAttendance(attendanceSession.id);
+    } catch (error) {
+      console.error("Error recording checkout:", error);
+      const message = error.response?.data?.message || "Failed to record checkout";
+      setSnackbar({ open: true, message, severity: "error" });
+    } finally {
+      setCheckoutActionId(null);
+    }
+  };
+
+  const handleUndoCheckout = async (checkinId) => {
+    setCheckoutActionId(checkinId);
+    try {
+      await axios.post(`${BACKEND_URL}/api/checkin/${checkinId}/checkout`, { checkoutTime: null });
+      await loadAttendance(attendanceSession.id);
+    } catch (error) {
+      console.error("Error clearing checkout:", error);
+      setSnackbar({ open: true, message: "Failed to undo checkout", severity: "error" });
+    } finally {
+      setCheckoutActionId(null);
     }
   };
 
@@ -800,7 +890,7 @@ const AddTraining = () => {
                 <Select
                   value={formData.startTime ?? ""}
                   label="Start Time"
-                  onChange={handleChange("startTime")}
+                  onChange={handleStartTimeChange}
                 >
                   {timeOptions.map((time) => (
                     <MenuItem key={time} value={time}>
@@ -811,16 +901,22 @@ const AddTraining = () => {
               </FormControl>
             </Grid>
 
-            {/* Training Length */}
+            {/* End Time */}
             <Grid size={{ xs: 12, md: 6 }} sx={{ minWidth: '250px' }}>
-              <TextField
-                fullWidth
-                required
-                type="number"
-                label="Training Length (minutes)"
-                value={formData.length ?? ""}
-                onChange={handleChange("length")}
-              />
+              <FormControl fullWidth required disabled={!formData.startTime}>
+                <InputLabel>End Time</InputLabel>
+                <Select
+                  value={formData.endTime ?? ""}
+                  label="End Time"
+                  onChange={handleChange("endTime")}
+                >
+                  {endTimeOptions.map((time) => (
+                    <MenuItem key={time} value={time}>
+                      {time}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
 
             {/* Topics */}
@@ -1183,6 +1279,15 @@ const AddTraining = () => {
                                 <AddIcon />
                               </IconButton>
                             </Tooltip>
+                            <Tooltip title="Manage Attendance (mark someone as left early)">
+                              <IconButton
+                                edge="end"
+                                onClick={() => handleOpenAttendance(session)}
+                                sx={ACTION_BUTTON_SX}
+                              >
+                                <HowToRegIcon />
+                              </IconButton>
+                            </Tooltip>
                             <Tooltip title="Close Out Session & Credit Hours">
                               <IconButton
                                 edge="end"
@@ -1339,6 +1444,71 @@ const AddTraining = () => {
           <Button onClick={handleAddNewTopic} variant="contained">
             Add Topic
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Manage Attendance Dialog — mark a specific checked-in employee as
+          having left early, so close-out credits real elapsed time for them
+          instead of the whole session's duration. */}
+      <Dialog open={!!attendanceSession} onClose={handleCloseAttendance} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          Manage Attendance
+          {attendanceSession && (
+            <Typography variant="body2" color="text.secondary">
+              {moment(attendanceSession.date).format("MMM D, YYYY")} — {attendanceSession.location}
+            </Typography>
+          )}
+        </DialogTitle>
+        <DialogContent>
+          {attendanceLoading ? (
+            <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
+              <CircularProgress size={28} />
+            </Box>
+          ) : attendanceCheckins.length === 0 ? (
+            <Typography color="text.secondary" sx={{ py: 2 }}>
+              No one has checked in yet.
+            </Typography>
+          ) : (
+            <List>
+              {attendanceCheckins.map((c, idx) => (
+                <React.Fragment key={c.id}>
+                  {idx > 0 && <Divider component="li" />}
+                  <ListItem
+                    secondaryAction={
+                      checkoutActionId === c.id ? (
+                        <CircularProgress size={20} sx={{ mr: 1 }} />
+                      ) : c.checkoutTime ? (
+                        <Tooltip title="Undo — they didn't actually leave early">
+                          <IconButton edge="end" onClick={() => handleUndoCheckout(c.id)}>
+                            <UndoIcon />
+                          </IconButton>
+                        </Tooltip>
+                      ) : (
+                        <Tooltip title="Mark as left early">
+                          <IconButton edge="end" onClick={() => handleMarkLeftEarly(c.id)}>
+                            <LogoutIcon />
+                          </IconButton>
+                        </Tooltip>
+                      )
+                    }
+                  >
+                    <ListItemText
+                      primary={c.name || employees.find((e) => e.id === c.employeeId)?.name || c.employeeId}
+                      secondary={
+                        c.checkoutTime
+                          ? `Checked in ${moment(c.checkinTime).format("h:mm A")} · Left ${moment(c.checkoutTime).format("h:mm A")}`
+                          : `Checked in ${moment(c.checkinTime).format("h:mm A")}`
+                      }
+                    />
+                    {c.checkoutTime && <Chip label="Left early" size="small" color="warning" sx={{ mr: 1 }} />}
+                  </ListItem>
+                </React.Fragment>
+              ))}
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseAttendance}>Close</Button>
         </DialogActions>
       </Dialog>
 
