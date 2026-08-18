@@ -84,9 +84,13 @@ function normalizeSiteKey(name: string): string {
 
 // Matches a spreadsheet's Site value against the real sites already set up
 // in Manage Sites — case/whitespace differences ("mcac " vs "MCAC") are
-// auto-corrected to the canonical stored name. A value that doesn't match
-// anything at all is left as-is (still imported, so a typo doesn't block
-// the whole batch) but flagged so the person importing can see it.
+// auto-corrected to the canonical stored name, and a sheet that spells out
+// the full name instead of the acronym (e.g. "Eastway Regional Recreation
+// Center" instead of "ERRC") resolves the same way, since knownSitesByKey
+// below indexes both. Either way the result is always the canonical
+// acronym — that's what's stored. A value that doesn't match anything at
+// all is left as-is (still imported, so a typo doesn't block the whole
+// batch) but flagged so the person importing can see it.
 function resolveSite(raw: string, knownSitesByKey: Map<string, string>): { resolved: string; recognized: boolean } {
   const trimmed = String(raw || '').trim();
   if (!trimmed) return { resolved: '', recognized: true };
@@ -128,17 +132,25 @@ export default function ImportEmployeesDialog({ open, onClose, onImportComplete,
   // Same ['sites'] query key the parent Manage Employees page (and Manage
   // Sites) already use, so opening this dialog reuses the cached site list
   // instead of re-fetching it — matched against Site values from the sheet
-  // (see resolveSite above).
+  // (see resolveSite above). Fetches full site objects (name + optional
+  // fullName), not just names — Manage Sites's own ['sites'] query does the
+  // same, since it's the only other consumer that needs more than a bare
+  // name; every consumer that only needs a name list still maps it down to
+  // strings in its own queryFn.
   const { data: knownSitesByKey = new Map<string, string>() } = useQuery({
     queryKey: ['sites'],
     queryFn: async () => {
       const response = await axios.get(`${BACKEND_URL}/api/sites`);
-      return response.data.map((s: any) => s.name);
+      return response.data;
     },
-    select: (siteNames: string[]) => {
+    select: (sites: any[]) => {
       const map = new Map<string, string>();
-      siteNames.forEach((name) => {
-        if (name) map.set(normalizeSiteKey(name), name);
+      sites.forEach((site) => {
+        if (site.name) map.set(normalizeSiteKey(site.name), site.name);
+        // Points at the same canonical acronym — a sheet that spells out
+        // the full name resolves to exactly what one that used the
+        // acronym would.
+        if (site.fullName) map.set(normalizeSiteKey(site.fullName), site.name);
       });
       return map;
     },

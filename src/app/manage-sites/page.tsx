@@ -25,6 +25,7 @@ import { useAuth } from '../../components/AuthContext';
 interface Site {
   id: string;
   name: string;
+  fullName?: string | null;
 }
 
 const ManageSites = () => {
@@ -32,8 +33,13 @@ const ManageSites = () => {
   const isAdmin = user?.role === 'admin';
   const queryClient = useQueryClient();
   const [newSite, setNewSite] = useState('');
+  // The acronym stays what's actually used for data entry/reporting
+  // throughout the app — this is purely a supplementary label for the sites
+  // that read as a bare set of initials on their own.
+  const [newFullName, setNewFullName] = useState('');
   const [editSite, setEditSite] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
+  const [editFullName, setEditFullName] = useState('');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
   const { data: sites = [] } = useQuery<Site[]>({
@@ -54,19 +60,20 @@ const ManageSites = () => {
   };
 
   const createMutation = useMutation({
-    mutationFn: ({ siteName }: { siteName: string }) =>
-      axios.post('/api/sites', { siteName }),
+    mutationFn: ({ siteName, fullName }: { siteName: string; fullName?: string }) =>
+      axios.post('/api/sites', { siteName, fullName }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sites'] });
       setNewSite('');
+      setNewFullName('');
       setSnackbar({ open: true, message: 'Site added successfully', severity: 'success' });
     },
     onError: (err) => handleError(err, 'Failed to add site')
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, siteName }: { id: string; siteName: string }) =>
-      axios.put(`/api/sites/${id}`, { siteName }),
+    mutationFn: ({ id, siteName, fullName }: { id: string; siteName: string; fullName?: string }) =>
+      axios.put(`/api/sites/${id}`, { siteName, fullName }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sites'] });
       setEditSite(null);
@@ -89,12 +96,13 @@ const ManageSites = () => {
       setSnackbar({ open: true, message: 'Site name cannot be empty', severity: 'error' });
       return;
     }
-    createMutation.mutate({ siteName: newSite });
+    createMutation.mutate({ siteName: newSite, fullName: newFullName });
   };
 
   const startEditing = (site: Site) => {
     setEditSite(site.id);
     setEditName(site.name);
+    setEditFullName(site.fullName || '');
   };
 
   const handleSaveEdit = (id: string) => {
@@ -102,7 +110,7 @@ const ManageSites = () => {
       setSnackbar({ open: true, message: 'Site name cannot be empty', severity: 'error' });
       return;
     }
-    updateMutation.mutate({ id, siteName: editName });
+    updateMutation.mutate({ id, siteName: editName, fullName: editFullName });
   };
 
   const handleDeleteSite = (site: Site) => {
@@ -134,6 +142,16 @@ const ManageSites = () => {
               />
             </Grid>
             <Grid size={12}>
+              <TextField
+                fullWidth
+                label="Full Name (optional)"
+                helperText="For sites whose acronym isn't self-explanatory — the acronym above stays what's used for data entry and reports."
+                value={newFullName}
+                onChange={(e) => setNewFullName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddSite()}
+              />
+            </Grid>
+            <Grid size={12}>
               <Button variant="contained" color="primary" onClick={handleAddSite}>
                 Add Site
               </Button>
@@ -149,10 +167,19 @@ const ManageSites = () => {
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                       <TextField
                         fullWidth
+                        label="Site"
                         value={editName}
                         onChange={(e) => setEditName(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit(site.id)}
                         autoFocus
+                        size="small"
+                      />
+                      <TextField
+                        fullWidth
+                        label="Full Name (optional)"
+                        value={editFullName}
+                        onChange={(e) => setEditFullName(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit(site.id)}
                         size="small"
                       />
                       <Button size="small" variant="contained" onClick={() => handleSaveEdit(site.id)} sx={{ alignSelf: 'flex-start' }}>
@@ -162,7 +189,7 @@ const ManageSites = () => {
                   }
                 />
               ) : (
-                <ListItemText primary={site.name} />
+                <ListItemText primary={site.name} secondary={site.fullName || undefined} />
               )}
               {isAdmin && (
                 <ListItemSecondaryAction>
