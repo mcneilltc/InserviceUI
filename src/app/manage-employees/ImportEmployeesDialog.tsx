@@ -18,6 +18,7 @@ import {
 } from '@mui/icons-material';
 import * as XLSX from 'xlsx';
 import axios from 'axios';
+import moment from 'moment';
 import { useQuery } from '@tanstack/react-query';
 
 const BACKEND_URL = ''; // relative — proxied through next.config.mjs's rewrite so the session cookie is same-origin, not third-party
@@ -80,6 +81,17 @@ function parseBool(val: any): boolean {
 
 function normalizeSiteKey(name: string): string {
   return String(name || '').trim().toLowerCase();
+}
+
+// With XLSX.read's cellDates:true, date-like cells (including from CSV, due
+// to SheetJS's own date-pattern auto-detection) come through as JS Date
+// objects rather than the raw Excel serial numbers they'd otherwise be —
+// the backend's Zod schema expects certificationExpiration/expirationDate
+// as a plain 'YYYY-MM-DD' string, not a Date or number.
+function toDateString(val: any): string {
+  if (val instanceof Date) return moment(val).format('YYYY-MM-DD');
+  if (typeof val === 'number') return XLSX.SSF.format('yyyy-mm-dd', val);
+  return String(val || '').trim();
 }
 
 // Matches a spreadsheet's Site value against the real sites already set up
@@ -161,7 +173,7 @@ export default function ImportEmployeesDialog({ open, onClose, onImportComplete,
     const reader = new FileReader();
     reader.onload = (e) => {
       const data = new Uint8Array(e.target?.result as ArrayBuffer);
-      const workbook = XLSX.read(data, { type: 'array' });
+      const workbook = XLSX.read(data, { type: 'array', cellDates: true });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const json: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
 
@@ -205,7 +217,9 @@ export default function ImportEmployeesDialog({ open, onClose, onImportComplete,
       excelHeaders.forEach(h => {
         const field = columnMap[h];
         if (field && field !== 'skip') {
-          out[field] = field === 'site' ? resolveSite(row[h], knownSitesByKey).resolved : row[h];
+          out[field] = field === 'site' ? resolveSite(row[h], knownSitesByKey).resolved
+            : field === 'certExpiration' ? toDateString(row[h])
+            : row[h];
         }
       });
       // flip name
@@ -258,6 +272,7 @@ export default function ImportEmployeesDialog({ open, onClose, onImportComplete,
         const field = columnMap[h];
         if (field && field !== 'skip') emp[field] = row[h];
       });
+      if (emp.certExpiration) emp.certExpiration = toDateString(emp.certExpiration);
 
       const name = flipName(emp.name || '');
       if (!name) { skipped.push('Row with empty name'); continue; }
