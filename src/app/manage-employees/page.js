@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useDeferredValue } from 'react';
 import {
   Container,
   Paper,
@@ -482,10 +482,15 @@ const ManageEmployees = () => {
     return summary;
   };
 
+  // Deferred so typing in the search box (a ~60-row table re-render per
+  // keystroke) doesn't block the input's own paint — React can keep the
+  // field responsive and catch the list up a beat later.
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+
   const filteredEmployees = employees.filter(employee => {
     const matchesActiveTab = activeTab === 0 ? employee.isActive : !employee.isActive;
     const matchesLocation = !selectedLocation || employee.locations.includes(selectedLocation);
-    const matchesSearch = !searchQuery.trim() || (employee.name || '').toLowerCase().includes(searchQuery.trim().toLowerCase());
+    const matchesSearch = !deferredSearchQuery.trim() || (employee.name || '').toLowerCase().includes(deferredSearchQuery.trim().toLowerCase());
     return matchesActiveTab && matchesLocation && matchesSearch;
   });
 
