@@ -50,6 +50,7 @@ import {
   Unarchive as UnarchiveIcon,
   Search as SearchIcon,
   ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
   Download as DownloadIcon,
   FilterList as FilterListIcon,
   QrCode2 as QrCodeIcon,
@@ -177,6 +178,12 @@ const AddTraining = () => {
   const [attendanceCheckins, setAttendanceCheckins] = useState([]);
   const [attendanceLoading, setAttendanceLoading] = useState(false);
   const [checkoutActionId, setCheckoutActionId] = useState(null);
+  // Inline "who's checked in" row expander on the session list — a lighter
+  // read-only glance than the Manage Attendance dialog (which is for taking
+  // the left-early action), and multiple rows can be open at once. Keyed by
+  // session id so each row's fetch/loading state is independent.
+  const [expandedCheckins, setExpandedCheckins] = useState({});
+  const [expandedCheckinsLoading, setExpandedCheckinsLoading] = useState({});
   // A single confirm dialog reused for actions that are hard to undo (Archive,
   // Cancel Training, Close Out) — a safety net so a mis-tap among the tightly
   // clustered action icons doesn't silently take effect.
@@ -525,6 +532,47 @@ const AddTraining = () => {
   const handleOpenAttendance = (session) => {
     setAttendanceSession(session);
     loadAttendance(session.id);
+  };
+
+  // Toggles the inline check-in list under a session row. Collapsing just
+  // hides it (keeps the cached list so re-expanding is instant); expanding
+  // always re-fetches, since who's checked in can change while it's closed.
+  const toggleExpandCheckins = async (session) => {
+    const sessionId = session.id;
+    if (expandedCheckins[sessionId] !== undefined) {
+      setExpandedCheckins((prev) => {
+        const next = { ...prev };
+        delete next[sessionId];
+        return next;
+      });
+      return;
+    }
+    setExpandedCheckinsLoading((prev) => ({ ...prev, [sessionId]: true }));
+    try {
+      const { data } = await axios.get(`${BACKEND_URL}/api/checkin/session/${sessionId}`);
+      // "Manually Add Employee" already creates a checkin doc (see
+      // handleSubmitManualEmployee), so it's covered above — but the
+      // separate "Update Trainees" roster (and the trainee list a session
+      // is created with) only ever touches session.trainees, with no
+      // checkin doc at all. Surface those too, so the view reflects
+      // everyone a trainer has put on this session, not just who's actually
+      // scanned in.
+      const checkedInIds = new Set(data.map((c) => c.employeeId));
+      const rosterOnly = (session.trainees || [])
+        .filter((id) => !checkedInIds.has(id))
+        .map((id) => employees.find((e) => e.id === id))
+        .filter(Boolean);
+      setExpandedCheckins((prev) => ({ ...prev, [sessionId]: { checkins: data, rosterOnly } }));
+    } catch (error) {
+      console.error("Error loading check-ins:", error);
+      setSnackbar({ open: true, message: "Failed to load check-ins", severity: "error" });
+    } finally {
+      setExpandedCheckinsLoading((prev) => {
+        const next = { ...prev };
+        delete next[sessionId];
+        return next;
+      });
+    }
   };
 
   const handleCloseAttendance = () => {
@@ -1238,6 +1286,18 @@ const AddTraining = () => {
                   <Box sx={{ display: "flex", gap: 1.5, flexShrink: 0 }}>
                       {session.status !== "completed" &&
                         session.status !== "cancelled" && (
+                          <Tooltip title={expandedCheckins[session.id] !== undefined ? "Hide Checked-In Employees" : "Show Checked-In Employees"}>
+                            <IconButton
+                              edge="end"
+                              onClick={() => toggleExpandCheckins(session)}
+                              sx={ACTION_BUTTON_SX}
+                            >
+                              {expandedCheckins[session.id] !== undefined ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      {session.status !== "completed" &&
+                        session.status !== "cancelled" && (
                           <Tooltip title="Show Check-In QR Code">
                             <IconButton
                               edge="end"
@@ -1356,6 +1416,54 @@ const AddTraining = () => {
                       )}
                   </Box>
                 </ListItem>
+                <Collapse in={expandedCheckins[session.id] !== undefined} unmountOnExit>
+                  <Box sx={{ px: 2, pb: 2, bgcolor: "action.hover" }}>
+                    {expandedCheckinsLoading[session.id] ? (
+                      <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
+                        <CircularProgress size={24} />
+                      </Box>
+                    ) : !expandedCheckins[session.id]?.checkins?.length && !expandedCheckins[session.id]?.rosterOnly?.length ? (
+                      <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
+                        No one has checked in yet.
+                      </Typography>
+                    ) : (
+                      <List dense disablePadding>
+                        {expandedCheckins[session.id].checkins.map((c, idx) => (
+                          <React.Fragment key={c.id}>
+                            {idx > 0 && <Divider component="li" />}
+                            <ListItem disableGutters>
+                              <ListItemText
+                                primary={c.name || employees.find((e) => e.id === c.employeeId)?.name || c.employeeId}
+                                secondary={
+                                  c.checkoutTime
+                                    ? `Checked in ${moment(c.checkinTime).format("h:mm A")} · Left ${moment(c.checkoutTime).format("h:mm A")}`
+                                    : `Checked in ${moment(c.checkinTime).format("h:mm A")}`
+                                }
+                              />
+                              {c.checkoutTime && <Chip label="Left early" size="small" color="warning" />}
+                            </ListItem>
+                          </React.Fragment>
+                        ))}
+                        {expandedCheckins[session.id].rosterOnly.length > 0 && (
+                          <>
+                            {expandedCheckins[session.id].checkins.length > 0 && <Divider component="li" />}
+                            <Typography variant="caption" color="text.secondary" sx={{ pl: 2, display: "block", pt: 1 }}>
+                              On roster, not checked in
+                            </Typography>
+                            {expandedCheckins[session.id].rosterOnly.map((emp, idx) => (
+                              <React.Fragment key={emp.id}>
+                                {idx > 0 && <Divider component="li" />}
+                                <ListItem disableGutters>
+                                  <ListItemText primary={emp.name} secondary="Added to session, not checked in" />
+                                </ListItem>
+                              </React.Fragment>
+                            ))}
+                          </>
+                        )}
+                      </List>
+                    )}
+                  </Box>
+                </Collapse>
                 <Divider />
               </React.Fragment>
             ))}
@@ -1464,48 +1572,81 @@ const AddTraining = () => {
             <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
               <CircularProgress size={28} />
             </Box>
-          ) : attendanceCheckins.length === 0 ? (
-            <Typography color="text.secondary" sx={{ py: 2 }}>
-              No one has checked in yet.
-            </Typography>
-          ) : (
-            <List>
-              {attendanceCheckins.map((c, idx) => (
-                <React.Fragment key={c.id}>
-                  {idx > 0 && <Divider component="li" />}
-                  <ListItem
-                    secondaryAction={
-                      checkoutActionId === c.id ? (
-                        <CircularProgress size={20} sx={{ mr: 1 }} />
-                      ) : c.checkoutTime ? (
-                        <Tooltip title="Undo — they didn't actually leave early">
-                          <IconButton edge="end" onClick={() => handleUndoCheckout(c.id)}>
-                            <UndoIcon />
-                          </IconButton>
-                        </Tooltip>
-                      ) : (
-                        <Tooltip title="Mark as left early">
-                          <IconButton edge="end" onClick={() => handleMarkLeftEarly(c.id)}>
-                            <LogoutIcon />
-                          </IconButton>
-                        </Tooltip>
-                      )
-                    }
-                  >
-                    <ListItemText
-                      primary={c.name || employees.find((e) => e.id === c.employeeId)?.name || c.employeeId}
-                      secondary={
-                        c.checkoutTime
-                          ? `Checked in ${moment(c.checkinTime).format("h:mm A")} · Left ${moment(c.checkoutTime).format("h:mm A")}`
-                          : `Checked in ${moment(c.checkinTime).format("h:mm A")}`
+          ) : (() => {
+            // Same distinction as the inline expand on the session row: an
+            // actual checkin doc (QR self-check-in or "Manually Add
+            // Employee", which also checks the person in) vs. someone only
+            // on session.trainees via "Update Trainees" / creation-time
+            // roster, which never creates a checkin doc.
+            const checkedInIds = new Set(attendanceCheckins.map((c) => c.employeeId));
+            const rosterOnly = (attendanceSession?.trainees || [])
+              .filter((id) => !checkedInIds.has(id))
+              .map((id) => employees.find((e) => e.id === id))
+              .filter(Boolean);
+
+            if (attendanceCheckins.length === 0 && rosterOnly.length === 0) {
+              return (
+                <Typography color="text.secondary" sx={{ py: 2 }}>
+                  No one has checked in yet.
+                </Typography>
+              );
+            }
+
+            return (
+              <List>
+                {attendanceCheckins.map((c, idx) => (
+                  <React.Fragment key={c.id}>
+                    {idx > 0 && <Divider component="li" />}
+                    <ListItem
+                      secondaryAction={
+                        checkoutActionId === c.id ? (
+                          <CircularProgress size={20} sx={{ mr: 1 }} />
+                        ) : c.checkoutTime ? (
+                          <Tooltip title="Undo — they didn't actually leave early">
+                            <IconButton edge="end" onClick={() => handleUndoCheckout(c.id)}>
+                              <UndoIcon />
+                            </IconButton>
+                          </Tooltip>
+                        ) : (
+                          <Tooltip title="Mark as left early">
+                            <IconButton edge="end" onClick={() => handleMarkLeftEarly(c.id)}>
+                              <LogoutIcon />
+                            </IconButton>
+                          </Tooltip>
+                        )
                       }
-                    />
-                    {c.checkoutTime && <Chip label="Left early" size="small" color="warning" sx={{ mr: 1 }} />}
-                  </ListItem>
-                </React.Fragment>
-              ))}
-            </List>
-          )}
+                    >
+                      <ListItemText
+                        primary={c.name || employees.find((e) => e.id === c.employeeId)?.name || c.employeeId}
+                        secondary={
+                          c.checkoutTime
+                            ? `Checked in ${moment(c.checkinTime).format("h:mm A")} · Left ${moment(c.checkoutTime).format("h:mm A")}`
+                            : `Checked in ${moment(c.checkinTime).format("h:mm A")}`
+                        }
+                      />
+                      {c.checkoutTime && <Chip label="Left early" size="small" color="warning" sx={{ mr: 1 }} />}
+                    </ListItem>
+                  </React.Fragment>
+                ))}
+                {rosterOnly.length > 0 && (
+                  <>
+                    {attendanceCheckins.length > 0 && <Divider component="li" />}
+                    <Typography variant="caption" color="text.secondary" sx={{ pl: 2, display: "block", pt: 1 }}>
+                      On roster, not checked in
+                    </Typography>
+                    {rosterOnly.map((emp, idx) => (
+                      <React.Fragment key={emp.id}>
+                        {idx > 0 && <Divider component="li" />}
+                        <ListItem>
+                          <ListItemText primary={emp.name} secondary="Added to session, not checked in" />
+                        </ListItem>
+                      </React.Fragment>
+                    ))}
+                  </>
+                )}
+              </List>
+            );
+          })()}
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseAttendance}>Close</Button>
